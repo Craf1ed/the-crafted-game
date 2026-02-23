@@ -16,8 +16,8 @@ let db, fbRef, fbSet, fbGet, fbUpdate, fbRemove, fbOnValue, fbOnDisconnect, fbOf
 let roomCode = '';
 let myId = '';
 let isHost = false;
+let _joinedPlayers = false; // track whether we've self-removed to avoid kick loop
 
-// ── Callbacks ────────────────────────────────────
 export let onPlayerUpdated    = () => {};
 export let onPlayerLeft       = () => {};
 export let onBulletFired      = () => {};
@@ -26,6 +26,7 @@ export let onPickupTaken      = () => {};
 export let onWeaponDropped    = () => {};
 export let onKillRegistered   = () => {};
 export let onDamageReceived   = () => {};
+export let onCountdownTick    = () => {};
 
 export function setCallbacks(cbs) {
   if (cbs.onPlayerUpdated)    onPlayerUpdated    = cbs.onPlayerUpdated;
@@ -36,16 +37,15 @@ export function setCallbacks(cbs) {
   if (cbs.onWeaponDropped)    onWeaponDropped    = cbs.onWeaponDropped;
   if (cbs.onKillRegistered)   onKillRegistered   = cbs.onKillRegistered;
   if (cbs.onDamageReceived)   onDamageReceived   = cbs.onDamageReceived;
+  if (cbs.onCountdownTick)    onCountdownTick    = cbs.onCountdownTick;
 }
 
-// ── Init ─────────────────────────────────────────
 export async function initNetwork(code, id) {
   roomCode = code; myId = id;
   const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js');
   const dbd = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js');
-  fbRef = dbd.ref; fbSet = dbd.set; fbGet = dbd.get; fbUpdate = dbd.update;
-  fbRemove = dbd.remove; fbOnValue = dbd.onValue; fbOnDisconnect = dbd.onDisconnect;
-  fbOff = dbd.off;
+  fbRef=dbd.ref; fbSet=dbd.set; fbGet=dbd.get; fbUpdate=dbd.update;
+  fbRemove=dbd.remove; fbOnValue=dbd.onValue; fbOnDisconnect=dbd.onDisconnect; fbOff=dbd.off;
   const app = initializeApp(FIREBASE_CONFIG);
   db = dbd.getDatabase(app);
   return db;
@@ -53,45 +53,52 @@ export async function initNetwork(code, id) {
 
 function r(path) { return fbRef(db, path); }
 
-// ── Name check ───────────────────────────────────
 export async function checkNameTaken(code, name) {
   const snap = await fbGet(r(`rooms/${code}/players`));
   if (!snap.exists()) return false;
   return Object.values(snap.val()).some(p => p.name?.toLowerCase() === name.toLowerCase());
 }
 
-// ── Join room ────────────────────────────────────
 export async function joinRoom(playerData) {
   const snap = await fbGet(r(`rooms/${roomCode}`));
-  isHost = !snap.exists() || !snap.val()?.host;
+  const existing = snap.exists() ? snap.val() : null;
+  // Host = room doesn't exist, or room exists but has no host field, or host field is empty
+  isHost = !existing || !existing.host;
 
   const playerRef = r(`rooms/${roomCode}/players/${myId}`);
   await fbSet(playerRef, { ...playerData, joinedAt: Date.now() });
   fbOnDisconnect(playerRef).remove();
+  _joinedPlayers = true;
 
   if (isHost) {
     await fbUpdate(r(`rooms/${roomCode}`), {
-      host: myId, state: 'lobby', createdAt: Date.now(),
+      host: myId, state: 'lobby',
+      countdown: -1,   // -1 = not running
+      createdAt: Date.now(),
     });
     fbOnDisconnect(r(`rooms/${roomCode}/host`)).remove();
   }
 
   let knownPlayers = new Set();
 
-  // Players listener — detects joins AND leaves
+  // Players
   fbOnValue(r(`rooms/${roomCode}/players`), snap => {
     const data = snap.val() || {};
-    const currentIds = new Set(Object.keys(data));
+    const cur  = new Set(Object.keys(data));
     for (const id of knownPlayers)
-      if (!currentIds.has(id) && id !== myId) onPlayerLeft(id);
-    knownPlayers = currentIds;
+      if (!cur.has(id) && id !== myId) onPlayerLeft(id);
+    knownPlayers = cur;
     for (const [id, p] of Object.entries(data))
       if (id !== myId) onPlayerUpdated(id, p);
   });
 
-  // Room state
+  // Room state + countdown
   fbOnValue(r(`rooms/${roomCode}`), snap => {
-    if (snap.exists()) onRoomStateChanged(snap.val());
+    if (!snap.exists()) return;
+    const d = snap.val();
+    onRoomStateChanged(d);
+    if (typeof d.countdown === 'number' && d.countdown >= 0)
+      onCountdownTick(d.countdown);
   });
 
   // Bullets
@@ -117,10 +124,10 @@ export async function joinRoom(playerData) {
   // Kills
   fbOnValue(r(`rooms/${roomCode}/kills`), snap => {
     if (!snap.exists()) return;
-    for (const [, kill] of Object.entries(snap.val())) onKillRegistered(kill);
+    for (const [, k] of Object.entries(snap.val())) onKillRegistered(k);
   });
 
-  // Damage events — listen only on OUR player's inbox
+  // Damage inbox (only ours)
   fbOnValue(r(`rooms/${roomCode}/damage/${myId}`), snap => {
     if (!snap.exists()) return;
     for (const [, ev] of Object.entries(snap.val())) onDamageReceived(ev);
@@ -129,17 +136,18 @@ export async function joinRoom(playerData) {
   return isHost;
 }
 
-// ── Kick listener — detects when our own player node is removed ──
+// Kicked = our node vanishes while we didn't self-remove
 export function listenForKick(code, id, onKicked) {
+  let initialized = false;
   fbOnValue(r(`rooms/${code}/players/${id}`), snap => {
-    // If our node disappears while we're in-lobby (not self-removed), we were kicked
-    if (!snap.exists()) onKicked();
+    if (!initialized) { initialized = true; return; } // first fire = our own join
+    if (!snap.exists() && _joinedPlayers) onKicked();
   });
 }
 
 export function getIsHost() { return isHost; }
 
-// ── Throttled player push ────────────────────────
+// ── Push player state (20Hz) ─────────────────────
 let lastPush = 0;
 export function pushPlayerState(player, ts) {
   if (ts - lastPush < 50) return;
@@ -152,11 +160,12 @@ export function pushPlayerState(player, ts) {
       eliminated: player.eliminated || false,
       weaponId: player.weaponId, ammo: player.ammo,
       kills: player.kills, hitFlash: player.hitFlash > 0 ? 1 : 0,
+      name: player.name, color: player.color, id: player.id,
     });
   } catch(e) {}
 }
 
-// ── Bullet broadcast ─────────────────────────────
+// ── Bullets ──────────────────────────────────────
 export function broadcastBullets(newBullets) {
   for (const b of newBullets) {
     try {
@@ -166,21 +175,18 @@ export function broadcastBullets(newBullets) {
   }
 }
 
-// ── Shooter-authoritative damage ─────────────────
-// Shooter pushes a damage event into the VICTIM's inbox on Firebase.
-// The victim's client reads it and applies the HP reduction locally.
+// ── Damage (shooter-authoritative) ───────────────
 export function broadcastDamage(victimId, dmg, killerId) {
   const evId = `dmg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   try {
     fbSet(r(`rooms/${roomCode}/damage/${victimId}/${evId}`), {
       id: evId, victimId, dmg, killerId, ts: Date.now(),
     });
-    // Clean up after 5s
     setTimeout(() => { try { fbRemove(r(`rooms/${roomCode}/damage/${victimId}/${evId}`)); } catch(e){} }, 5000);
   } catch(e) {}
 }
 
-// ── Pickup events ────────────────────────────────
+// ── Pickups ──────────────────────────────────────
 export function broadcastPickupTaken(type, id) {
   const evId = `ev_${Date.now()}_${myId}`;
   try {
@@ -199,7 +205,7 @@ export function removeWeaponDrop(dropId) {
   try { fbRemove(r(`rooms/${roomCode}/weaponDrops/${dropId}`)); } catch(e) {}
 }
 
-// ── Kill events ──────────────────────────────────
+// ── Kills ────────────────────────────────────────
 export function broadcastKill(killerId, killerName, victimId, victimName) {
   const kid = `kill_${Date.now()}_${killerId}`;
   try {
@@ -208,18 +214,35 @@ export function broadcastKill(killerId, killerName, victimId, victimName) {
   } catch(e) {}
 }
 
-// ── Host controls ────────────────────────────────
+// ── Host: kick ───────────────────────────────────
 export async function kickPlayer(targetId) {
   if (!isHost) return;
-  try {
-    // Remove the player's node — their listenForKick will fire and reload their page
-    await fbRemove(r(`rooms/${roomCode}/players/${targetId}`));
-  } catch(e) {}
+  try { await fbRemove(r(`rooms/${roomCode}/players/${targetId}`)); } catch(e) {}
+}
+
+// ── Host: countdown then start ───────────────────
+let _countdownInterval = null;
+export async function startCountdown(seconds) {
+  if (!isHost) return;
+  if (_countdownInterval) clearInterval(_countdownInterval);
+  let remaining = seconds;
+  // Write initial value
+  await fbUpdate(r(`rooms/${roomCode}`), { countdown: remaining });
+  _countdownInterval = setInterval(async () => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(_countdownInterval);
+      _countdownInterval = null;
+      await fbUpdate(r(`rooms/${roomCode}`), { countdown: 0, state: 'playing', startedAt: Date.now() });
+    } else {
+      await fbUpdate(r(`rooms/${roomCode}`), { countdown: remaining });
+    }
+  }, 1000);
 }
 
 export async function startMatch() {
   if (!isHost) return;
-  try { await fbUpdate(r(`rooms/${roomCode}`), { state: 'playing', startedAt: Date.now() }); } catch(e) {}
+  try { await fbUpdate(r(`rooms/${roomCode}`), { state: 'playing', countdown: -1, startedAt: Date.now() }); } catch(e) {}
 }
 
 export async function setLobbyTimer(seconds) {
@@ -237,5 +260,6 @@ export async function endMatch(winnerId, winnerName) {
 }
 
 export function leaveRoom() {
+  _joinedPlayers = false;
   try { fbRemove(r(`rooms/${roomCode}/players/${myId}`)); } catch(e) {}
 }
