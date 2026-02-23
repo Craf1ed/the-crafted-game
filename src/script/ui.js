@@ -2,7 +2,9 @@
 // UI.JS — Lobby, HUD, Leaderboard, Overlays
 // ═══════════════════════════════════════════════
 
-import { COLOR_PALETTE, WEAPON_DEFS } from './weapons.js';
+// FIX: COLOR_PALETTE lives in player.js, not weapons.js
+import { COLOR_PALETTE } from './player.js';
+import { WEAPON_DEFS } from './weapons.js';
 export { COLOR_PALETTE } from './player.js';
 
 // ── LOBBY ────────────────────────────────────────
@@ -103,7 +105,7 @@ export function renderLeaderboard(players) {
   el.innerHTML = `
     <div class="lb-title">LEADERBOARD</div>
     ${sorted.map((p, i) => `
-      <div class="lb-row ${p.eliminated ? 'lb-elim' : p.alive ? '' : ''}">
+      <div class="lb-row ${p.eliminated ? 'lb-elim' : ''}">
         <span class="lb-rank">#${i + 1}</span>
         <span class="lb-dot" style="background:${p.color || '#0ff'};box-shadow:0 0 5px ${p.color || '#0ff'}"></span>
         <span class="lb-name">${escHtml(p.name || '???')}</span>
@@ -195,21 +197,24 @@ export function showSpectatorMode() {
 }
 
 // ── CROSSHAIR ────────────────────────────────────
-export function drawCrosshair(ctx, mouseX, mouseY, camX, camY, color) {
-  const wx = mouseX + camX, wy = mouseY + camY;
+// FIX: Crosshair now takes pure screen-space coords (mouseX, mouseY) only.
+// Previously it incorrectly added camX/camY internally, causing a double-offset
+// when called from inside a ctx.translate(-camX, -camY) block.
+// Now it is called OUTSIDE any translate, in screen space.
+export function drawCrosshair(ctx, screenX, screenY, color) {
   ctx.save();
   ctx.strokeStyle = (color || '#00ffff') + 'cc';
   ctx.lineWidth = 1.5;
   ctx.shadowBlur = 10;
   ctx.shadowColor = color || '#0ff';
   ctx.beginPath();
-  ctx.moveTo(wx - 12, wy); ctx.lineTo(wx - 4, wy);
-  ctx.moveTo(wx + 4, wy);  ctx.lineTo(wx + 12, wy);
-  ctx.moveTo(wx, wy - 12); ctx.lineTo(wx, wy - 4);
-  ctx.moveTo(wx, wy + 4);  ctx.lineTo(wx, wy + 12);
+  ctx.moveTo(screenX - 12, screenY); ctx.lineTo(screenX - 4, screenY);
+  ctx.moveTo(screenX + 4, screenY);  ctx.lineTo(screenX + 12, screenY);
+  ctx.moveTo(screenX, screenY - 12); ctx.lineTo(screenX, screenY - 4);
+  ctx.moveTo(screenX, screenY + 4);  ctx.lineTo(screenX, screenY + 12);
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(wx, wy, 5, 0, Math.PI * 2);
+  ctx.arc(screenX, screenY, 5, 0, Math.PI * 2);
   ctx.strokeStyle = (color || '#00ffff') + '55';
   ctx.lineWidth = 1;
   ctx.shadowBlur = 5;
