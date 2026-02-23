@@ -98,7 +98,7 @@ async function handleJoin(solo) {
   const name = document.getElementById('player-name').value.trim();
   const room = document.getElementById('room-code').value.trim().toUpperCase();
 
-  if (!name) { setLobbyStatus('Enter a callsign!'); return; }
+  if (!name) { setLobbyStatus('Enter a name!'); return; }
   if (!room)  { setLobbyStatus('Enter a room code!'); return; }
   if (name.length < 2) { setLobbyStatus('Name too short (min 2 chars)'); return; }
 
