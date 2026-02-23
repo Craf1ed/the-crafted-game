@@ -35,25 +35,24 @@ export function createLocalPlayer(id, name, color) {
     hp: 100,
     maxHp: 100,
     alive: true,
-    eliminated: false,     // permanently out of round
+    eliminated: false,
     kills: 0,
     weaponId: 'pistol',
     ammo: WEAPON_DEFS.pistol.maxAmmo,
     reloading: false,
     reloadStart: 0,
     shootCooldown: 0,
-    burstQueue: 0,         // remaining burst shots
+    burstQueue: 0,
     burstTimer: 0,
     radius: PLAYER_RADIUS,
     hitFlash: 0,
-    respawnCountdown: 0,   // not used in BR, kept for future
+    respawnCountdown: 0,
   };
 }
 
 export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) {
   if (!player.alive) return;
 
-  // Acceleration from input
   let ax = 0, ay = 0;
   if (keys['w'] || keys['arrowup'])    ay -= ACCEL;
   if (keys['s'] || keys['arrowdown'])  ay += ACCEL;
@@ -62,13 +61,11 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   const il = Math.hypot(ax, ay);
   if (il > ACCEL) { ax = ax / il * ACCEL; ay = ay / il * ACCEL; }
 
-  // Momentum
   player.vx += ax * dt;
   player.vy += ay * dt;
   player.vx -= player.vx * FRICTION * dt;
   player.vy -= player.vy * FRICTION * dt;
 
-  // Collide & move X
   const nx = player.x + player.vx * dt;
   const m = player.radius + 1;
   const canX = !isSolid(nx + m, player.y) && !isSolid(nx - m, player.y)
@@ -76,25 +73,21 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
     && !isSolid(nx + m, player.y + m) && !isSolid(nx - m, player.y + m);
   if (canX) player.x = nx; else player.vx *= -0.2;
 
-  // Collide & move Y
   const ny = player.y + player.vy * dt;
   const canY = !isSolid(player.x + m, ny) && !isSolid(player.x - m, ny)
     && !isSolid(player.x, ny + m) && !isSolid(player.x, ny - m);
   if (canY) player.y = ny; else player.vy *= -0.2;
 
-  // Aim
+  // FIX: aim uses screen-space mouse + camera offset to get world-space target
   player.angle = Math.atan2((mouseY + camY) - player.y, (mouseX + camX) - player.x);
 
-  // Cooldowns
   if (player.shootCooldown > 0) player.shootCooldown -= dt;
   if (player.hitFlash > 0) player.hitFlash -= dt;
 
-  // Burst timer
   if (player.burstQueue > 0) {
     player.burstTimer -= dt;
   }
 
-  // Reload
   if (player.reloading) {
     const def = WEAPON_DEFS[player.weaponId];
     if (performance.now() - player.reloadStart >= def.reloadTime) {
@@ -131,7 +124,6 @@ export function drawLocalPlayer(ctx, player, t) {
   if (!player.alive) return;
   ctx.save();
 
-  // Pulse ring
   const pr = player.radius + 8 + 3 * Math.sin(t * 4);
   ctx.beginPath();
   ctx.arc(player.x, player.y, pr, 0, Math.PI * 2);
@@ -139,7 +131,6 @@ export function drawLocalPlayer(ctx, player, t) {
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Gradient fill
   const grad = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.radius);
   grad.addColorStop(0, player.color + '55');
   grad.addColorStop(1, player.color + '00');
@@ -148,7 +139,6 @@ export function drawLocalPlayer(ctx, player, t) {
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // Ring
   ctx.beginPath();
   ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
   ctx.strokeStyle = player.hitFlash > 0 ? '#fff' : player.color;
@@ -157,14 +147,12 @@ export function drawLocalPlayer(ctx, player, t) {
   ctx.shadowColor = player.hitFlash > 0 ? '#fff' : player.color;
   ctx.stroke();
 
-  // Center pip
   ctx.beginPath();
   ctx.arc(player.x, player.y, 4, 0, Math.PI * 2);
   ctx.fillStyle = player.hitFlash > 0 ? '#fff' : player.color;
   ctx.shadowBlur = 10;
   ctx.fill();
 
-  // Gun barrel
   const gl = player.radius + 14;
   ctx.beginPath();
   ctx.moveTo(player.x + Math.cos(player.angle) * 6, player.y + Math.sin(player.angle) * 6);
@@ -175,7 +163,6 @@ export function drawLocalPlayer(ctx, player, t) {
   ctx.shadowColor = player.color;
   ctx.stroke();
 
-  // Muzzle dot
   ctx.beginPath();
   ctx.arc(
     player.x + Math.cos(player.angle) * gl,
@@ -186,16 +173,13 @@ export function drawLocalPlayer(ctx, player, t) {
   ctx.shadowBlur = 12;
   ctx.fill();
 
-  // Name tag
   ctx.shadowBlur = 0;
   ctx.font = '700 9px Orbitron,monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = player.color;
   ctx.fillText(player.name.toUpperCase(), player.x, player.y - player.radius - 8);
 
-  // HP bar
   drawHpBar(ctx, player);
-
   ctx.restore();
 }
 
@@ -206,7 +190,6 @@ export function drawRemotePlayer(ctx, p, t) {
   const color = p.color || '#ff4444';
   const flashing = p.hitFlash > 0;
 
-  // Pulse
   const pr = PLAYER_RADIUS + 6 + 2 * Math.sin(t * 4);
   ctx.beginPath();
   ctx.arc(p.x, p.y, pr, 0, Math.PI * 2);
@@ -214,7 +197,6 @@ export function drawRemotePlayer(ctx, p, t) {
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Gradient
   const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, PLAYER_RADIUS);
   grad.addColorStop(0, color + '44');
   grad.addColorStop(1, color + '00');
@@ -223,7 +205,6 @@ export function drawRemotePlayer(ctx, p, t) {
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // Ring
   ctx.beginPath();
   ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
   ctx.strokeStyle = flashing ? '#fff' : color;
@@ -232,14 +213,12 @@ export function drawRemotePlayer(ctx, p, t) {
   ctx.shadowColor = flashing ? '#fff' : color;
   ctx.stroke();
 
-  // Pip
   ctx.beginPath();
   ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
   ctx.fillStyle = flashing ? '#fff' : color;
   ctx.shadowBlur = 8;
   ctx.fill();
 
-  // Gun
   if (p.angle !== undefined) {
     const gl = PLAYER_RADIUS + 14;
     ctx.beginPath();
@@ -252,16 +231,13 @@ export function drawRemotePlayer(ctx, p, t) {
     ctx.stroke();
   }
 
-  // Name
   ctx.shadowBlur = 0;
   ctx.font = '700 9px Orbitron,monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
   ctx.fillText((p.name || '???').toUpperCase(), p.x, p.y - PLAYER_RADIUS - 8);
 
-  // HP bar
   drawHpBar(ctx, { ...p, radius: PLAYER_RADIUS, color });
-
   ctx.restore();
 }
 
@@ -279,7 +255,6 @@ function drawHpBar(ctx, p) {
 }
 
 export function drawDeadPlayer(ctx, p, t) {
-  // Ghost / spectator marker — an X where they died
   ctx.save();
   const color = p.color || '#ff4444';
   const alpha = 0.35 + 0.15 * Math.sin(t * 2);
