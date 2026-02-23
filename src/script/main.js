@@ -4,9 +4,8 @@
 
 import { buildMap, drawMap, drawMinimap, randomOpenPos, WORLD_W, WORLD_H } from './map.js';
 import {
-  WEAPON_DEFS, SPAWNABLE_WEAPONS,
-  ammoPickups, weaponPickups,
-  initPickups, spawnAmmoPickup, spawnWeaponPickup,
+  WEAPON_DEFS, ammoPickups, weaponPickups,
+  initPickups, spawnAmmoPickup,
   removeAmmoPickup, removeWeaponPickup,
   bullets, fireBullets, addRemoteBullet, updateBullets,
   drawBullets, drawAmmoPickups, drawWeaponPickups,
@@ -21,8 +20,9 @@ import {
   initNetwork, joinRoom, checkNameTaken, setCallbacks,
   pushPlayerState, broadcastBullets, broadcastPickupTaken,
   broadcastWeaponDrop, removeWeaponDrop,
-  broadcastKill, kickPlayer, startMatch, setLobbyTimer, endMatch,
-  getIsHost,
+  broadcastKill, broadcastDamage,
+  kickPlayer, startMatch, setLobbyTimer, endMatch,
+  getIsHost, listenForKick,
 } from './network.js';
 import {
   hideLobby, showHUD, setLobbyStatus,
@@ -34,10 +34,10 @@ import {
 } from './ui.js';
 
 // ── Canvas ───────────────────────────────────────
-const canvas  = document.getElementById('canvas');
-const ctx     = canvas.getContext('2d');
-const mmCanvas= document.getElementById('minimap');
-const mmCtx   = mmCanvas.getContext('2d');
+const canvas   = document.getElementById('canvas');
+const ctx      = canvas.getContext('2d');
+const mmCanvas = document.getElementById('minimap');
+const mmCtx    = mmCanvas.getContext('2d');
 
 function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
 resize();
@@ -48,10 +48,8 @@ const keys = {};
 let mouseX = 0, mouseY = 0, mouseDown = false;
 
 window.addEventListener('keydown', e => {
-  // Don't eat keys while typing in lobby inputs
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
   keys[e.key.toLowerCase()] = true;
   if (e.key.toLowerCase() === 'r' && localPlayer) tryReload(localPlayer);
   if (!['f5','f11','f12'].includes(e.key.toLowerCase())) e.preventDefault();
@@ -67,15 +65,16 @@ let localPlayer   = null;
 let remotePlayers = {};
 let camX = 0, camY = 0;
 let lastTime = 0;
-let gameRunning = false;
-let gamePhase = 'lobby';   // lobby | playing | ended
-let myId    = 'p_' + Math.random().toString(36).slice(2);
-let myColor = COLOR_PALETTE[0];
-let hostId  = null;
-let weaponDrops = {};
-let processedPickups = new Set();
-let processedDrops   = new Set();
-let killLogProcessed = new Set();
+let gameRunning  = false;
+let gamePhase    = 'lobby';
+let myId         = 'p_' + Math.random().toString(36).slice(2);
+let myColor      = COLOR_PALETTE[0];
+let hostId       = null;
+let weaponDrops  = {};
+let processedPickups   = new Set();
+let processedDrops     = new Set();
+let killLogProcessed   = new Set();
+let damageLogProcessed = new Set();
 
 // ── Color picker ─────────────────────────────────
 function onColorPick(c) {
@@ -110,7 +109,6 @@ async function handleJoin(solo) {
   localPlayer = createLocalPlayer(myId, name, myColor);
 
   if (solo) {
-    // ── Solo: straight into game ─────────────────
     hostId    = myId;
     gamePhase = 'playing';
     hideLobby();
@@ -122,23 +120,22 @@ async function handleJoin(solo) {
     return;
   }
 
-  // ── Multiplayer ──────────────────────────────
   try {
     await initNetwork(room, myId);
 
     setCallbacks({
-      onPlayerUpdated: (id, data) => {
+      onPlayerUpdated:    (id, data) => {
         if (!remotePlayers[id]) remotePlayers[id] = {};
         Object.assign(remotePlayers[id], data);
       },
-      onPlayerLeft: (id) => { delete remotePlayers[id]; },
-      onBulletFired: (b) => addRemoteBullet(b),
+      onPlayerLeft:       (id) => { delete remotePlayers[id]; },
+      onBulletFired:      (b)  => addRemoteBullet(b),
       onRoomStateChanged: handleRoomStateChange,
-      onPickupTaken: handleRemotePickup,
-      onWeaponDropped: (did, drop) => {
-        if (!processedDrops.has(did)) weaponDrops[did] = drop;
-      },
-      onKillRegistered: handleRemoteKill,
+      onPickupTaken:      handleRemotePickup,
+      onWeaponDropped:    (did, drop) => { if (!processedDrops.has(did)) weaponDrops[did] = drop; },
+      onKillRegistered:   handleRemoteKill,
+      // NEW: shooter pushes damage events; victim applies them
+      onDamageReceived:   handleRemoteDamage,
     });
 
     const taken = await checkNameTaken(room, name);
@@ -152,23 +149,22 @@ async function handleJoin(solo) {
       joinedAt: Date.now(),
     });
 
-    if (isHost) {
-      hostId = myId;
-      wireHostControls();
-    }
+    if (isHost) { hostId = myId; wireHostControls(); }
 
-    // Stay in lobby — show waiting room panel
+    // Listen for being kicked — if our own player node vanishes, we were kicked
+    listenForKick(room, myId, () => {
+      alert('You were kicked from the room.');
+      location.reload();
+    });
+
     gamePhase = 'lobby';
     document.getElementById('lobby-waiting').style.display = 'block';
     showHostControls(isHost);
     setLobbyStatus(
-      isHost
-        ? '⭐ You are HOST — kick players or start when ready'
-        : 'Joined! Waiting for host to start...',
+      isHost ? '⭐ You are HOST — kick players or start when ready'
+             : 'Joined! Waiting for host to start...',
       isHost ? '#ff0' : '#0a8'
     );
-
-    // Run the render loop behind the lobby so it's instant when it opens
     startGameLoop();
 
   } catch (err) {
@@ -183,22 +179,18 @@ function wireHostControls() {
     startBtn._wired = true;
     startBtn.addEventListener('click', async () => {
       await startMatch();
-      // Local host: transition immediately (Firebase will also fire onRoomStateChanged)
       enterGame();
     });
   }
   const timerSel = document.getElementById('host-timer');
   if (timerSel && !timerSel._wired) {
     timerSel._wired = true;
-    timerSel.addEventListener('change', async () => {
-      await setLobbyTimer(parseInt(timerSel.value));
-    });
+    timerSel.addEventListener('change', async () => setLobbyTimer(parseInt(timerSel.value)));
   }
 }
 
-// Called when game actually begins (from host click OR from Firebase state change)
 function enterGame() {
-  if (gamePhase === 'playing') return; // already started
+  if (gamePhase === 'playing') return;
   gamePhase = 'playing';
   hideLobby();
   showHUD();
@@ -210,19 +202,12 @@ function enterGame() {
 // ── Room state handler ───────────────────────────
 function handleRoomStateChange(roomData) {
   hostId = roomData.host;
-
-  // Keep lobby player list fresh
   if (roomData.players && gamePhase === 'lobby') {
     renderLobbyPlayers(roomData.players, myId, hostId, kickPlayer);
     showHostControls(hostId === myId);
     if (hostId === myId) wireHostControls();
   }
-
-  // Host started the match
-  if (roomData.state === 'playing' && gamePhase === 'lobby') {
-    enterGame();
-  }
-
+  if (roomData.state === 'playing' && gamePhase === 'lobby') enterGame();
   if (roomData.state === 'ended' && roomData.winner) {
     const w = roomData.winner;
     gamePhase = 'ended';
@@ -230,7 +215,6 @@ function handleRoomStateChange(roomData) {
   }
 }
 
-// ── Remote pickup handler ────────────────────────
 function handleRemotePickup(ev) {
   if (processedPickups.has(ev.id)) return;
   processedPickups.add(ev.id);
@@ -238,28 +222,61 @@ function handleRemotePickup(ev) {
   if (ev.type === 'weapon') removeWeaponPickup(ev.id);
 }
 
-// ── Remote kill handler ──────────────────────────
+// ── Remote damage (shooter-authoritative) ────────
+// The shooter detects the hit on their screen and pushes a damage event
+// targeted at the victim's ID. The victim applies it locally.
+function handleRemoteDamage(ev) {
+  const key = ev.id;
+  if (damageLogProcessed.has(key)) return;
+  damageLogProcessed.add(key);
+
+  // Only apply if we are the target
+  if (ev.victimId !== myId) return;
+  if (!localPlayer || !localPlayer.alive) return;
+
+  localPlayer.hp -= ev.dmg;
+  localPlayer.hitFlash = 0.15;
+  triggerHitFlash();
+
+  if (localPlayer.hp <= 0) {
+    localPlayer.hp = 0;
+    localPlayer.alive      = false;
+    localPlayer.eliminated = true;
+
+    if (localPlayer.weaponId !== 'pistol') {
+      const dp  = randomOpenPos([], 80);
+      const did = broadcastWeaponDrop(localPlayer.weaponId, dp.x, dp.y);
+      weaponDrops[did] = { weaponId: localPlayer.weaponId, x: dp.x, y: dp.y };
+    }
+
+    const killer = remotePlayers[ev.killerId];
+    showEliminatedOverlay(killer?.name || '???', killer?.color || '#f44');
+    showSpectatorMode();
+    broadcastKill(ev.killerId, killer?.name || '???', myId, localPlayer.name);
+    addKillFeed(killer?.name || '???', killer?.color || '#f44', localPlayer.name, localPlayer.color);
+    pushPlayerState(localPlayer, performance.now());
+  }
+  updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
+}
+
 function handleRemoteKill(kill) {
   const kid = `${kill.killerId}_${kill.ts}`;
   if (killLogProcessed.has(kid)) return;
   killLogProcessed.add(kid);
 
-  // Credit kills
-  if (kill.killerId === myId && localPlayer) {
+  if (kill.killerId === myId && localPlayer)
     localPlayer.kills = (localPlayer.kills || 0) + 1;
-  } else if (remotePlayers[kill.killerId]) {
+  else if (remotePlayers[kill.killerId])
     remotePlayers[kill.killerId].kills = (remotePlayers[kill.killerId].kills || 0) + 1;
-  }
 
-  // Mark victim
   if (kill.victimId !== myId && remotePlayers[kill.victimId]) {
-    remotePlayers[kill.victimId].alive       = false;
-    remotePlayers[kill.victimId].eliminated  = true;
+    remotePlayers[kill.victimId].alive      = false;
+    remotePlayers[kill.victimId].eliminated = true;
   }
 
-  const killerColor = kill.killerId === myId ? localPlayer?.color : remotePlayers[kill.killerId]?.color || '#ff4444';
-  const victimColor = kill.victimId === myId ? localPlayer?.color : remotePlayers[kill.victimId]?.color  || '#ff4444';
-  addKillFeed(kill.killerName, killerColor, kill.victimName, victimColor);
+  const kc = kill.killerId === myId ? localPlayer?.color : remotePlayers[kill.killerId]?.color || '#ff4444';
+  const vc = kill.victimId === myId ? localPlayer?.color : remotePlayers[kill.victimId]?.color  || '#ff4444';
+  addKillFeed(kill.killerName, kc, kill.victimName, vc);
 }
 
 // ── Game loop ────────────────────────────────────
@@ -285,22 +302,22 @@ function update(dt, ts) {
   if (gamePhase === 'playing' && localPlayer.alive) {
     updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
 
-    // Shoot
-    if ((mouseDown || keys[' ']) && localPlayer.shootCooldown <= 0 && !localPlayer.reloading && localPlayer.ammo > 0) {
+    if ((mouseDown || keys[' ']) && localPlayer.shootCooldown <= 0
+        && !localPlayer.reloading && localPlayer.ammo > 0) {
       handleShoot();
     }
 
-    // Camera follows player
     camX = Math.max(0, Math.min(WORLD_W - canvas.width,  localPlayer.x - canvas.width  / 2));
     camY = Math.max(0, Math.min(WORLD_H - canvas.height, localPlayer.y - canvas.height / 2));
 
     checkPickups();
+
+    // Shooter-side: detect our bullets hitting remote players and push damage events
     checkOutgoingBulletHits();
-    checkIncomingBulletHits();
+
     pushPlayerState(localPlayer, ts);
 
   } else if (gamePhase === 'playing' && !localPlayer.alive) {
-    // Spectate first alive remote player
     const alive = Object.values(remotePlayers).find(p => p.alive);
     if (alive) {
       camX = Math.max(0, Math.min(WORLD_W - canvas.width,  alive.x - canvas.width  / 2));
@@ -370,11 +387,10 @@ function checkPickups() {
       setTimeout(() => spawnAmmoPickup(), 8000);
     }
   }
-
   for (const wp of [...weaponPickups]) {
     if (Math.hypot(localPlayer.x - wp.x, localPlayer.y - wp.y) < r + 18) {
       if (localPlayer.weaponId !== 'pistol') {
-        const dp = randomOpenPos([{x: localPlayer.x, y: localPlayer.y}], 60);
+        const dp  = randomOpenPos([{x: localPlayer.x, y: localPlayer.y}], 60);
         const did = broadcastWeaponDrop(localPlayer.weaponId, dp.x, dp.y);
         weaponDrops[did] = { weaponId: localPlayer.weaponId, x: dp.x, y: dp.y };
       }
@@ -384,11 +400,10 @@ function checkPickups() {
       processedPickups.add(wp.id);
     }
   }
-
   for (const [did, drop] of Object.entries(weaponDrops)) {
     if (Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y) < r + 18) {
       if (localPlayer.weaponId !== 'pistol') {
-        const dp = randomOpenPos([{x: localPlayer.x, y: localPlayer.y}], 60);
+        const dp  = randomOpenPos([{x: localPlayer.x, y: localPlayer.y}], 60);
         const nid = broadcastWeaponDrop(localPlayer.weaponId, dp.x, dp.y);
         weaponDrops[nid] = { weaponId: localPlayer.weaponId, x: dp.x, y: dp.y };
       }
@@ -399,54 +414,23 @@ function checkPickups() {
   }
 }
 
-// ── Bullet hit detection ─────────────────────────
-// Our bullets hitting remote players (visual only — damage is client-auth'd on their side)
+// ── Bullet hit detection — SHOOTER AUTHORITATIVE ─
+// When our bullet hits a remote player on OUR screen,
+// we push a damage event directly to Firebase → their client applies it.
+// No more waiting for bullet packets to travel both ways.
 function checkOutgoingBulletHits() {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
-    if (b.ownerId !== myId) continue;
-    for (const rp of Object.values(remotePlayers)) {
+    if (b.ownerId !== myId) continue; // only our own
+
+    for (const [rid, rp] of Object.entries(remotePlayers)) {
       if (!rp.alive) continue;
       if (Math.hypot(b.x - rp.x, b.y - rp.y) < PLAYER_RADIUS + b.r) {
+        // Push damage event targeting the victim
+        broadcastDamage(rid, b.dmg, myId);
         bullets.splice(i, 1);
         break;
       }
-    }
-  }
-}
-
-// Remote bullets hitting us
-function checkIncomingBulletHits() {
-  for (let i = bullets.length - 1; i >= 0; i--) {
-    const b = bullets[i];
-    if (b.ownerId === myId) continue;
-    if (!localPlayer.alive) continue;
-
-    if (Math.hypot(b.x - localPlayer.x, b.y - localPlayer.y) < PLAYER_RADIUS + b.r) {
-      localPlayer.hp -= b.dmg;
-      localPlayer.hitFlash = 0.12;
-      bullets.splice(i, 1);
-      triggerHitFlash();
-
-      if (localPlayer.hp <= 0) {
-        localPlayer.hp = 0;
-        localPlayer.alive = false;
-        localPlayer.eliminated = true;
-
-        if (localPlayer.weaponId !== 'pistol') {
-          const dp = randomOpenPos([], 80);
-          const did = broadcastWeaponDrop(localPlayer.weaponId, dp.x, dp.y);
-          weaponDrops[did] = { weaponId: localPlayer.weaponId, x: dp.x, y: dp.y };
-        }
-
-        const killer = remotePlayers[b.ownerId];
-        showEliminatedOverlay(killer?.name || '???', killer?.color || '#f44');
-        showSpectatorMode();
-        broadcastKill(b.ownerId, killer?.name || '???', myId, localPlayer.name);
-        addKillFeed(killer?.name || '???', killer?.color || '#f44', localPlayer.name, localPlayer.color);
-        pushPlayerState(localPlayer, performance.now());
-      }
-      updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
     }
   }
 }
@@ -486,37 +470,29 @@ function draw(ts) {
   // World-space
   ctx.save();
   ctx.translate(-camX, -camY);
-
   drawMap(ctx, camX, camY, canvas.width, canvas.height);
   drawAmmoPickups(ctx, t);
   drawWeaponPickups(ctx, t);
   drawDroppedWeapons(ctx, t);
   drawBullets(ctx);
 
-  for (const [, p] of Object.entries(remotePlayers)) {
+  for (const [, p] of Object.entries(remotePlayers))
     p.alive ? drawRemotePlayer(ctx, p, t) : drawDeadPlayer(ctx, p, t);
-  }
-  if (localPlayer) {
+  if (localPlayer)
     localPlayer.alive ? drawLocalPlayer(ctx, localPlayer, t) : drawDeadPlayer(ctx, localPlayer, t);
-  }
-
   ctx.restore();
 
-  // Crosshair in screen-space (drawn after restore)
-  if (localPlayer?.alive && gamePhase === 'playing') {
+  // Crosshair — screen-space, after restore
+  if (localPlayer?.alive && gamePhase === 'playing')
     drawCrosshair(ctx, mouseX, mouseY, localPlayer.color);
-  }
 
-  // Minimap
   const allPlayers = localPlayer ? { [myId]: localPlayer, ...remotePlayers } : remotePlayers;
   drawMinimap(mmCtx, mmCanvas.width, mmCanvas.height,
     allPlayers, myId, camX, camY, canvas.width, canvas.height,
     ammoPickups, [...weaponPickups, ...Object.values(weaponDrops)]);
 
-  // Leaderboard (only once in game)
-  if (localPlayer && gamePhase !== 'lobby') {
+  if (localPlayer && gamePhase !== 'lobby')
     renderLeaderboard({ [myId]: localPlayer, ...remotePlayers });
-  }
 }
 
 function drawDroppedWeapons(ctx, t) {
@@ -524,7 +500,7 @@ function drawDroppedWeapons(ctx, t) {
     const def = WEAPON_DEFS[drop.weaponId]; if (!def) continue;
     const pulse = 0.9 + 0.1 * Math.sin(t * 4);
     ctx.save();
-    ctx.beginPath(); ctx.arc(drop.x, drop.y, 12 * pulse, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(drop.x, drop.y, 12 * pulse, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fill();
     ctx.strokeStyle = def.color; ctx.lineWidth = 1.5;
     ctx.shadowBlur = 10; ctx.shadowColor = def.color; ctx.stroke();
