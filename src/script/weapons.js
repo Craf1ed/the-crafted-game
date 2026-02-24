@@ -32,8 +32,8 @@ export const WEAPON_DEFS = {
     bulletLife: 1.1, bulletR: 4, color: '#ffaa00', reloadTime: 1900,
   },
   squirt: {
-    id: 'squirt', name: 'BUSTSHOT', maxAmmo: 100000, damage: 1,
-    fireRate: 0.000001, bulletSpeed: 420000, bulletCount: 50, spread: 0.5,
+    id: 'squirt', name: 'BUSTSHOT', maxAmmo: 50, damage: 1,
+    fireRate: 0.000001, bulletSpeed: 4200, bulletCount: 50, spread: 0.5,
     bulletLife: 5.1, bulletR: 4, color: '#ffffff', reloadTime: 1900,
   },
 };
