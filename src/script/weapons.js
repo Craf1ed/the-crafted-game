@@ -31,9 +31,14 @@ export const WEAPON_DEFS = {
     fireRate: 0.35, bulletSpeed: 420, bulletCount: 3, spread: 0.22,
     bulletLife: 1.1, bulletR: 4, color: '#ffaa00', reloadTime: 1900,
   },
+  squirt: {
+    id: 'squirt', name: 'BUSTSHOT', maxAmmo: 100000, damage: 1,
+    fireRate: 0.000001, bulletSpeed: 420000, bulletCount: 50, spread: 0.5,
+    bulletLife: 5.1, bulletR: 4, color: '#ffffff', reloadTime: 1900,
+  },
 };
 
-export const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot'];
+export const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot', "squirt"];
 
 // ── Pickup state ─────────────────────────────────
 export let ammoPickups = [];
