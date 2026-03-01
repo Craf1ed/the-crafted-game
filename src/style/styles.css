@@ -203,18 +203,46 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 #host-controls { display:none; }
 #mode-picker { display:flex; flex-direction:column; gap:6px; margin-top:.5rem; }
 .mode-opt {
-  display:flex; align-items:center; gap:8px;
+  display:flex; align-items:center; gap:10px;
   font-size:.65rem; letter-spacing:.12em; color:#0a8; cursor:pointer;
-  padding:5px 8px; border:1px solid transparent; transition:border-color .15s;
+  padding:8px 12px; border:1px solid rgba(0,255,255,.1);
+  background:rgba(0,255,255,.02);
+  transition:border-color .15s, background .15s, color .15s;
+  position:relative;
 }
-.mode-opt:hover { border-color:rgba(0,255,255,.15); color:#0ff; }
-.mode-opt input[type=radio] { accent-color:#0ff; cursor:pointer; }
+.mode-opt:hover {
+  border-color:rgba(0,255,255,.3);
+  background:rgba(0,255,255,.06);
+  color:#0ff;
+}
+.mode-opt:has(input:checked) {
+  border-color:#0ff;
+  background:rgba(0,255,255,.1);
+  color:#0ff;
+  box-shadow: 0 0 10px rgba(0,255,255,.12);
+}
+.mode-opt:has(input:checked)::before {
+  content:'';
+  position:absolute; top:-1px; left:0; bottom:-1px; width:2px;
+  background:#0ff;
+  box-shadow: 0 0 8px #0ff;
+}
+.mode-opt input[type=radio] {
+  accent-color:#0ff; cursor:pointer; width:14px; height:14px; flex-shrink:0;
+}
+.mode-opt span { display:flex; align-items:center; gap:7px; flex:1; }
+.mode-opt span i { color:#0ff; width:14px; text-align:center; opacity:.8; }
 .mode-opt input[type=number] {
-  background:rgba(0,255,255,.06); border:1px solid rgba(0,255,255,.22);
-  color:#0ff; padding:2px 4px; font-family:'Share Tech Mono',monospace;
-  font-size:.7rem; outline:none;
+  background:rgba(0,255,255,.08); border:1px solid rgba(0,255,255,.3);
+  color:#0ff; padding:3px 6px; font-family:'Share Tech Mono',monospace;
+  font-size:.72rem; outline:none; width:48px; text-align:center;
 }
-#host-start { margin-top:.6rem !important; padding:.5rem !important; font-size:.7rem !important; }
+.mode-opt input[type=number]:focus { border-color:#0ff; }
+#host-start {
+  margin-top:.8rem !important; padding:.6rem !important;
+  font-size:.72rem !important; letter-spacing:.18em !important;
+}
+#host-start i { margin-right:6px; }
 
 /* ══ HOW TO PLAY POPUP ══ */
 #howtoplay-overlay {

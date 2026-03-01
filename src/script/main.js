@@ -24,6 +24,7 @@ import { hideLobby, showHUD, setLobbyStatus,
          renderLeaderboard, addKillFeed, tickKillFeed,
          showEliminatedOverlay, hideRespawnOverlay,
          drawCrosshair, triggerHitFlash } from './ui.js';
+import { initBots, tickBots, checkBotCollisions, drawBots, getBots } from './bots.js';
 
 // ── Canvas ───────────────────────────────────
 const canvas   = document.getElementById('canvas');
@@ -78,16 +79,22 @@ let gameMode     = 'endless'; // 'endless' | 'lms' | 'killlimit'
 let killLimit    = 10;
 let isHost       = false;
 let matchEnded   = false;
+let isArcade     = false; // ARCADE room is always endless, no host lock
 
 // ── Color picker ──────────────────────────────
 function onColorPick(c) { myColor=c; renderColorPicker(COLOR_PALETTE, myColor, onColorPick); }
 renderColorPicker(COLOR_PALETTE, myColor, onColorPick);
 
 // ── Lobby wiring ──────────────────────────────
-document.getElementById('join-btn').addEventListener('click',  ()=>handleJoin(false));
-document.getElementById('solo-btn').addEventListener('click',  ()=>handleJoin(true));
+document.getElementById('join-btn').addEventListener('click',  ()=>{
+  const room = document.getElementById('room-code').value.trim().toUpperCase() || 'ARCADE';
+  isArcade = room === 'ARCADE';
+  handleJoin(false);
+});
+document.getElementById('solo-btn').addEventListener('click',  ()=>handleSolo());
 document.getElementById('global-btn').addEventListener('click',()=>{
   document.getElementById('room-code').value='ARCADE';
+  isArcade = true;
   handleJoin(false);
 });
 document.getElementById('player-name').addEventListener('keydown', e=>{
@@ -104,6 +111,54 @@ document.getElementById('host-start')?.addEventListener('click', () => {
   startMatch();
 });
 
+// ── Solo bot mode ─────────────────────────────
+async function handleSolo() {
+  const name = document.getElementById('player-name').value.trim();
+  if (!name)         { setLobbyStatus('Enter a callsign!'); return; }
+  if (name.length<2) { setLobbyStatus('Name too short (min 2)'); return; }
+
+  buildMap();
+  const seed = roomHash('SOLO_'+name);
+  const ammoPos   = getSeededPositions(seed,          20, 100);
+  const weaponPos = getSeededPositions(seed + 99999,   5, 120).map((p,i)=>({
+    ...p, weaponId: SPAWNABLE_WEAPONS[i % SPAWNABLE_WEAPONS.length]
+  }));
+  const healthPos = getSeededPositions(seed + 55555,  10, 110);
+
+  ammoPos.forEach((p,i)=>   { ammoPickups[`ammo_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
+  weaponPos.forEach((p,i)=> { weaponPickups[`wp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
+  healthPos.forEach((p,i)=> { healthPickups[`hp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
+
+  localPlayer = createLocalPlayer(myId, name, myColor);
+  gameMode  = 'solo';
+  gamePhase = 'playing';
+
+  // Init bots — pass live pickup refs so bots can consume them
+  initBots(localPlayer, ammoPickups, healthPickups, {
+    onKill: (bot) => {
+      // Bot was killed by player
+      localPlayer.kills = (localPlayer.kills || 0) + 1;
+      addKillFeed(localPlayer.name, localPlayer.color, bot.name, bot.color);
+    },
+    onDamage: (dmg, bot) => {
+      // Bot bullet hit player
+      if (!localPlayer.alive) return;
+      localPlayer.hp -= dmg;
+      localPlayer.hitFlash = 0.15;
+      triggerHitFlash();
+      updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
+      if (localPlayer.hp <= 0) handleDeath(bot.name, bot.color);
+    },
+  });
+
+  hideLobby(); showHUD();
+  showHowToPlay('solo', 0);
+  updateWeaponHUD('pistol');
+  updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS.pistol.maxAmmo, false);
+  updateHealthHUD(100, 100);
+  startGameLoop();
+}
+
 // ── Join ──────────────────────────────────────
 async function handleJoin(solo) {
   const name = document.getElementById('player-name').value.trim();
@@ -111,6 +166,9 @@ async function handleJoin(solo) {
 
   if (!name)         { setLobbyStatus('Enter a callsign!'); return; }
   if (name.length<2) { setLobbyStatus('Name too short (min 2)'); return; }
+
+  // ARCADE room is always endless, no host lock
+  if (room === 'ARCADE') isArcade = true;
 
   setLobbyStatus('Connecting...','#0ff');
   buildMap();
@@ -124,21 +182,6 @@ async function handleJoin(solo) {
   const healthPos = getSeededPositions(seed + 55555,  10, 110);
 
   localPlayer = createLocalPlayer(myId, name, myColor);
-
-  if (solo) {
-    ammoPos.forEach((p,i)=>   { ammoPickups[`ammo_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
-    weaponPos.forEach((p,i)=> { weaponPickups[`wp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
-    healthPos.forEach((p,i)=> { healthPickups[`hp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
-    gameMode  = 'endless';
-    gamePhase = 'playing';
-    hideLobby(); showHUD();
-    showHowToPlay('endless', 0);
-    updateWeaponHUD('pistol');
-    updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS.pistol.maxAmmo, false);
-    updateHealthHUD(100,100);
-    startGameLoop();
-    return;
-  }
 
   try {
     await initNetwork(room, myId);
@@ -183,13 +226,16 @@ async function handleJoin(solo) {
       onKillRegistered:  handleRemoteKill,
       onDamageReceived:  handleRemoteDamage,
       onRoomModeChanged: (meta) => {
-        gameMode  = meta.mode  || 'endless';
-        killLimit = meta.killLimit || 10;
+        // ARCADE room ignores mode changes — always endless
+        if (!isArcade) {
+          gameMode  = meta.mode  || 'endless';
+          killLimit = meta.killLimit || 10;
+        }
         // Non-host enters game when mode is broadcast
-        if (gamePhase !== 'playing') {
+        if (!isHost && gamePhase !== 'playing') {
           gamePhase = 'playing';
           hideLobby(); showHUD();
-          showHowToPlay(gameMode, killLimit);
+          showHowToPlay(isArcade ? 'endless' : gameMode, killLimit);
           updateWeaponHUD(localPlayer.weaponId);
           updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
           updateHealthHUD(100,100);
@@ -231,7 +277,19 @@ async function handleJoin(solo) {
     isHost = hostResult;
 
     document.getElementById('lobby-waiting').style.display='block';
-    if (isHost) {
+
+    if (isArcade) {
+      // ARCADE: always endless, auto-start immediately for everyone
+      gameMode  = 'endless';
+      gamePhase = 'playing';
+      hideLobby(); showHUD();
+      showHowToPlay('endless', 0);
+      updateWeaponHUD(localPlayer.weaponId);
+      updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
+      updateHealthHUD(100,100);
+      // Broadcast mode so others also auto-start (host only, but harmless)
+      if (isHost) broadcastRoomMode('endless', 0);
+    } else if (isHost) {
       document.getElementById('host-controls').style.display='block';
       setLobbyStatus('⭐ You are HOST — choose game mode and start','#ff0');
     } else {
@@ -259,7 +317,7 @@ function roomHash(str) {
 function startMatch() {
   gamePhase='playing';
   hideLobby(); showHUD();
-  showHowToPlay(gameMode, killLimit);
+  showHowToPlay(isArcade ? 'endless' : gameMode, killLimit);
   updateWeaponHUD(localPlayer.weaponId);
   updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
   updateHealthHUD(100,100);
@@ -276,10 +334,11 @@ function showHowToPlay(mode, limit) {
     endless:   '<i class="fa-solid fa-infinity"></i> ENDLESS — Respawn every 5s. No end. Chase that kill count.',
     lms:       '<i class="fa-solid fa-skull-crossbones"></i> LAST MAN STANDING — One life only. Last player alive wins.',
     killlimit: `<i class="fa-solid fa-trophy"></i> KILL LIMIT — First to <strong>${limit}</strong> kills wins. Respawn in 5s.`,
+    solo:      '<i class="fa-solid fa-robot"></i> SOLO vs BOTS — Survive against smart AI enemies. One life. Good luck.',
   };
   modeEl.innerHTML = modeText[mode] || modeText.endless;
 
-  const respawnNote = (mode === 'lms')
+  const respawnNote = (mode === 'lms' || mode === 'solo')
     ? '<span style="color:#f44"><i class="fa-solid fa-triangle-exclamation"></i> NO RESPAWN — one life!</span>'
     : '<i class="fa-solid fa-rotate"></i> Respawn in 5s after death';
 
@@ -307,6 +366,14 @@ function showHowToPlay(mode, limit) {
 function handleDeath(killerName, killerColor) {
   localPlayer.hp    = 0;
   localPlayer.alive = false;
+
+  if (gameMode === 'solo') {
+    // Solo: game over, show results
+    setTimeout(() => showSoloGameOver(killerName, killerColor), 800);
+    showEliminatedOverlay(killerName, killerColor);
+    return;
+  }
+
   showEliminatedOverlay(killerName, killerColor);
 
   // Update respawn overlay text each second
@@ -328,6 +395,41 @@ function handleDeath(killerName, killerColor) {
       }
     }
   }, 1000);
+}
+
+function showSoloGameOver(killerName, killerColor) {
+  gamePhase = 'ended';
+  const kills    = localPlayer?.kills || 0;
+  const botsDead = getBots().filter(b => !b.alive).length;
+  const botsAlive = getBots().length - botsDead;
+  const el = document.getElementById('game-msg');
+  if (!el) return;
+  el.style.display = 'flex';
+  el.style.color = '#f44';
+  el.style.textShadow = '0 0 30px #f44';
+  el.innerHTML = `<div style="text-align:center;font-family:'Orbitron',sans-serif">
+    <div style="font-size:3rem;font-weight:900;color:#f44;text-shadow:0 0 30px #f44;letter-spacing:.2em">GAME OVER</div>
+    <div style="font-size:.85rem;color:#888;margin-top:.5rem;letter-spacing:.2em">
+      ELIMINATED BY <span style="color:${killerColor||'#f44'}">${killerName||'???'}</span>
+    </div>
+    <div style="margin-top:1.8rem;display:flex;gap:3rem;justify-content:center;flex-wrap:wrap">
+      <div style="text-align:center">
+        <div style="font-size:2.5rem;color:#ffff44;font-weight:900">${kills}</div>
+        <div style="font-size:.6rem;color:#0a8;letter-spacing:.2em">BOTS KILLED</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:2.5rem;color:#ff8844;font-weight:900">${botsAlive}</div>
+        <div style="font-size:.6rem;color:#0a8;letter-spacing:.2em">BOTS ALIVE</div>
+      </div>
+    </div>
+    <div style="margin-top:.6rem;font-size:.65rem;color:#555;letter-spacing:.15em">
+      ${kills === 0 ? 'Better luck next time, rookie.' : kills < 2 ? 'Not bad — keep training.' : kills < 4 ? 'Solid run. Well played.' : 'Outstanding performance!'}
+    </div>
+    <div style="font-size:.65rem;margin-top:2.2rem;color:#444;letter-spacing:.2em;cursor:pointer"
+         onclick="location.reload()">
+      <i class="fa-solid fa-rotate-left"></i> CLICK TO PLAY AGAIN
+    </div>
+  </div>`;
 }
 
 function updateRespawnUI() {
@@ -541,6 +643,7 @@ function fireBurstSequence(def) {
   fireOne();
 }
 
+
 // ── Game loop ─────────────────────────────────
 function startGameLoop(){
   if (gameRunning) return;
@@ -590,6 +693,12 @@ function update(dt, ts){
 
   updateBullets(dt);
   tickKillFeed();
+
+  // Solo mode — tick bot AI and check collisions
+  if (gameMode === 'solo') {
+    tickBots(dt);
+    checkBotCollisions(myId);
+  }
 
   // Win condition (host only)
   if (isHost && gamePhase==='playing' && !matchEnded) checkWinCondition();
@@ -645,6 +754,10 @@ function draw(ts){
 
   for (const [,p] of Object.entries(remotePlayers))
     p.alive ? drawRemotePlayer(ctx,p,t) : drawDeadPlayer(ctx,p,t);
+
+  // Solo mode — draw bots
+  if (gameMode === 'solo') drawBots(ctx, t);
+
   if (localPlayer)
     localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t) : drawDeadPlayer(ctx,localPlayer,t);
   ctx.restore();
@@ -653,6 +766,10 @@ function draw(ts){
     drawCrosshair(ctx,mouseX,mouseY,localPlayer.color);
 
   const allP = localPlayer ? {[myId]:localPlayer,...remotePlayers} : remotePlayers;
+  // In solo mode, add bots to the minimap player list
+  if (gameMode === 'solo') {
+    for (const bot of getBots()) allP[bot.id] = bot;
+  }
   drawMinimap(mmCtx,mmCanvas.width,mmCanvas.height,
     allP,myId,camX,camY,canvas.width,canvas.height,
     Object.values(ammoPickups),
@@ -660,7 +777,9 @@ function draw(ts){
     Object.values(healthPickups));
 
   if (localPlayer && gamePhase!=='lobby')
-    renderLeaderboard({[myId]:localPlayer,...remotePlayers});
+    renderLeaderboard(gameMode === 'solo'
+      ? { [myId]: localPlayer, ...Object.fromEntries(getBots().map(b => [b.id, b])) }
+      : {[myId]:localPlayer,...remotePlayers});
 }
 
 // ── Utility ───────────────────────────────────
