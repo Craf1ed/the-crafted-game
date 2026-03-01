@@ -11,41 +11,29 @@
 <!-- ══ LOBBY ══ -->
 <div id="lobby">
   <h1>THE CRAFTED GAME</h1>
-  <div class="subtitle">BATTLE ROYALE</div>
+  <div class="subtitle">BATTLE ARCADE</div>
   <div class="panel">
     <label>CALLSIGN</label>
     <input id="player-name" type="text" placeholder="Enter your name" maxlength="14" autocomplete="off">
 
     <label>ROOM CODE</label>
-    <input id="room-code" type="text" placeholder="e.g. ALPHA1" maxlength="10" autocomplete="off">
+    <input id="room-code" type="text" placeholder="ARCADE or custom code" maxlength="10" autocomplete="off">
 
     <label class="color-label">CHOOSE COLOR</label>
     <div id="color-picker"></div>
 
     <button class="btn" id="join-btn">JOIN / CREATE ROOM</button>
     <button class="btn secondary" id="solo-btn">SOLO (OFFLINE)</button>
-    <button class="btn secondary" id="global-btn" style="border-color:#ff44ff;color:#ff44ff">⚡ JOIN GLOBAL SERVER</button>
+    <button class="btn global" id="global-btn">⚡ JOIN GLOBAL ARCADE</button>
 
     <div id="status-msg"></div>
 
-    <!-- Lobby waiting room (shown after joining) -->
     <div id="lobby-waiting">
       <div class="lw-title">PLAYERS IN ROOM</div>
       <div id="lobby-players"></div>
     </div>
-
-    <!-- Host controls -->
-    <div id="host-controls">
-      <label>START TIMER</label>
-      <select id="host-timer">
-        <option value="5">5s</option>
-        <option value="15">15s</option>
-        <option value="30" selected>30s</option>
-        <option value="60">60s</option>
-      </select>
-      <button id="host-start">START NOW</button>
-    </div>
   </div>
+  <div class="lobby-info">No host needed · Join anytime · Respawn in 5s after death</div>
 </div>
 
 <!-- ══ CANVAS ══ -->
@@ -88,8 +76,7 @@
 <!-- ══ CONTROLS HINT ══ -->
 <div id="controls-hint">
   WASD — MOVE &nbsp;·&nbsp; MOUSE — AIM<br>
-  CLICK / SPACE — SHOOT &nbsp;·&nbsp; R — RELOAD<br>
-  WALK OVER WEAPONS/AMMO — PICK UP
+  CLICK / SPACE — SHOOT &nbsp;·&nbsp; R — RELOAD
 </div>
 
 <!-- ══ OVERLAYS ══ -->
@@ -98,7 +85,7 @@
 <div id="eliminated-overlay">
   <h2>ELIMINATED</h2>
   <p>KILLED BY <span id="elim-killer">???</span></p>
-  <p style="margin-top:1rem;font-size:.7rem;color:#444">SPECTATING REMAINING PLAYERS</p>
+  <!-- #respawn-count injected by JS -->
 </div>
 
 <div id="spectator-label">
@@ -106,14 +93,8 @@
   <span style="font-size:.6rem;color:rgba(0,255,255,.2)">YOU HAVE BEEN ELIMINATED</span>
 </div>
 
-<div id="countdown-overlay">
-  <p>MATCH STARTING IN</p>
-  <div id="countdown-num">3</div>
-</div>
-
 <div id="game-msg"></div>
 
-<!-- ══ SCRIPTS ══ -->
 <script type="module" src="script/main.js"></script>
 </body>
 </html>
