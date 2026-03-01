@@ -108,8 +108,19 @@ document.getElementById('host-start')?.addEventListener('click', () => {
   gameMode  = modeEl?.value || 'endless';
   killLimit = parseInt(document.getElementById('kill-limit-val')?.value) || 10;
   broadcastRoomMode(gameMode, killLimit);
-  startMatch();
+  // onRoomModeChanged will fire for everyone (including host) and launch the game
 });
+
+// Mode picker — JS-driven selected state (avoids :has() browser compat issues)
+document.querySelectorAll('input[name="gamemode"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.mode-opt').forEach(el => el.classList.remove('active'));
+    radio.closest('.mode-opt')?.classList.add('active');
+  });
+});
+// Set initial active state
+const defaultRadio = document.querySelector('input[name="gamemode"]:checked');
+defaultRadio?.closest('.mode-opt')?.classList.add('active');
 
 // ── Solo bot mode ─────────────────────────────
 async function handleSolo() {
@@ -192,10 +203,17 @@ async function handleJoin(solo) {
         if (!remotePlayers[id]) remotePlayers[id]={};
         Object.assign(remotePlayers[id], data);
         updateRemoteRender(id, data);
+        // Keep lobby player list live for everyone waiting
+        if (gamePhase === 'lobby') {
+          renderLobbyPlayers({ [myId]: localPlayer, ...remotePlayers }, myId);
+        }
       },
       onPlayerLeft: id => {
         delete remotePlayers[id];
         removeRemoteRender(id);
+        if (gamePhase === 'lobby') {
+          renderLobbyPlayers({ [myId]: localPlayer, ...remotePlayers }, myId);
+        }
       },
       onBulletFired: b => addRemoteBullet(b),
 
@@ -231,8 +249,8 @@ async function handleJoin(solo) {
           gameMode  = meta.mode  || 'endless';
           killLimit = meta.killLimit || 10;
         }
-        // Non-host enters game when mode is broadcast
-        if (!isHost && gamePhase !== 'playing') {
+        // Anyone who isn't in-game yet gets launched in (host already handled separately)
+        if (gamePhase !== 'playing' && gamePhase !== 'ended') {
           gamePhase = 'playing';
           hideLobby(); showHUD();
           showHowToPlay(isArcade ? 'endless' : gameMode, killLimit);
@@ -287,14 +305,16 @@ async function handleJoin(solo) {
       updateWeaponHUD(localPlayer.weaponId);
       updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
       updateHealthHUD(100,100);
-      // Broadcast mode so others also auto-start (host only, but harmless)
       if (isHost) broadcastRoomMode('endless', 0);
     } else if (isHost) {
       document.getElementById('host-controls').style.display='block';
-      setLobbyStatus('⭐ You are HOST — choose game mode and start','#ff0');
+      setLobbyStatus('⭐ You are HOST — pick a mode and start when ready','#ff0');
     } else {
-      setLobbyStatus('Waiting for host to start the match...','#0a8');
+      setLobbyStatus('Waiting for host to start the match…','#0a8');
     }
+
+    // Show current player list immediately for everyone in lobby
+    renderLobbyPlayers({ [myId]: localPlayer, ...remotePlayers }, myId);
     startGameLoop();
 
   } catch(err) {

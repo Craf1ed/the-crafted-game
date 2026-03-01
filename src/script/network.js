@@ -63,6 +63,10 @@ export async function checkNameTaken(code, name) {
 
 // ── Join (no host concept — room auto-initialises) ──
 export async function joinRoom(playerData, pickupPositions) {
+  // Determine host BEFORE writing ourselves (avoids race condition)
+  const existingSnap = await fbGet(r(`rooms/${roomCode}/players`));
+  const iAmHost = !existingSnap.exists() || Object.keys(existingSnap.val()).length === 0;
+
   // Write player
   const playerRef = r(`rooms/${roomCode}/players/${myId}`);
   await fbSet(playerRef, { ...playerData, joinedAt: Date.now() });
@@ -87,13 +91,6 @@ export async function joinRoom(playerData, pickupPositions) {
       pickupData[`hp_${i}`] = { ...pos, type: 'health', pulse: Math.random()*Math.PI*2 };
   }
   await fbSet(r(`rooms/${roomCode}/pickups`), pickupData);
-
-  // Determine host: first to join (no existing players)
-  const existingPlayersSnap = await fbGet(r(`rooms/${roomCode}/players`));
-  const existingPlayerCount = existingPlayersSnap.exists()
-    ? Object.keys(existingPlayersSnap.val()).filter(k => k !== myId).length
-    : 0;
-  const iAmHost = existingPlayerCount === 0;
 
   const roomSnap = await fbGet(r(`rooms/${roomCode}`));
   if (!roomSnap.exists() || !roomSnap.val().state) {
