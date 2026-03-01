@@ -530,7 +530,8 @@ function draw(ts){
   drawMinimap(mmCtx,mmCanvas.width,mmCanvas.height,
     allP,myId,camX,camY,canvas.width,canvas.height,
     Object.values(ammoPickups),
-    [...Object.values(weaponPickups),...Object.values(weaponDrops)]);
+    [...Object.values(weaponPickups),...Object.values(weaponDrops)],
+    Object.values(healthPickups));
 
   if (localPlayer && gamePhase!=='lobby')
     renderLeaderboard({[myId]:localPlayer,...remotePlayers});
