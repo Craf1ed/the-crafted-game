@@ -97,19 +97,21 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   if (player.hitFlash      > 0)    player.hitFlash      -= dt;
   if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
 
+  // Reload completes — but only refills what the player already has loaded
+  // (actual ammo count is managed by pickups; reload just chambers what's available)
   if (player.reloading) {
     const def = WEAPON_DEFS[player.weaponId];
     if (performance.now() - player.reloadStart >= def.reloadTime) {
-      player.ammo = def.maxAmmo;
+      // No free ammo — reloading is cosmetic/timing only; ammo comes from pickups
       player.reloading = false;
     }
   }
 }
 
+// R key: only shows the reload animation if there's actually ammo to chamber
 export function tryReload(player) {
   if (player.reloading) return;
-  const def = WEAPON_DEFS[player.weaponId];
-  if (player.ammo >= def.maxAmmo) return;
+  if (player.ammo <= 0) return; // nothing to reload with
   player.reloading = true;
   player.reloadStart = performance.now();
 }
@@ -122,9 +124,9 @@ export function equipWeapon(player, weaponId) {
   player.shootCooldown = 0;
 }
 
-export function refillAmmo(player) {
+export function refillAmmo(player, amount = 10) {
   const def = WEAPON_DEFS[player.weaponId];
-  player.ammo = Math.min(def.maxAmmo, player.ammo + Math.ceil(def.maxAmmo * 0.5));
+  player.ammo = Math.min(def.maxAmmo, player.ammo + amount);
 }
 
 // ── Remote interpolation ──────────────────────

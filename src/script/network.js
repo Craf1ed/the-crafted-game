@@ -72,6 +72,8 @@ export async function joinRoom(playerData, pickupPositions) {
       pickupData[`ammo_${i}`] = { ...pos, type: 'ammo', pulse: Math.random()*Math.PI*2 };
     for (const [i, pos] of pickupPositions.weapons.entries())
       pickupData[`wp_${i}`] = { ...pos, type: 'weapon', weaponId: pos.weaponId, pulse: Math.random()*Math.PI*2 };
+    for (const [i, pos] of (pickupPositions.health || []).entries())
+      pickupData[`hp_${i}`] = { ...pos, type: 'health', pulse: Math.random()*Math.PI*2 };
     await fbSet(r(`rooms/${roomCode}/pickups`), pickupData);
   }
 

@@ -6,7 +6,8 @@ import { buildMap, drawMap, drawMinimap, drawTeleporters, TELEPORTERS,
          getSeededPositions, randomOpenPos, WORLD_W, WORLD_H } from './map.js';
 import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
          fireBullets, addRemoteBullet, updateBullets,
-         drawBullets, drawAmmoPickups, drawWeaponPickups, drawDroppedWeapons } from './weapons.js';
+         drawBullets, drawAmmoPickups, drawWeaponPickups, drawDroppedWeapons,
+         drawHealthPickups } from './weapons.js';
 import { createLocalPlayer, updateLocalPlayer, tryReload,
          equipWeapon, refillAmmo,
          drawLocalPlayer, drawRemotePlayer, drawDeadPlayer,
@@ -60,6 +61,7 @@ let myColor = COLOR_PALETTE[0];
 // Pickup state — driven by Firebase
 let ammoPickups   = {};  // id → {x,y,pulse}
 let weaponPickups = {};  // id → {x,y,weaponId,pulse}
+let healthPickups = {};  // id → {x,y,pulse}
 let weaponDrops   = {};  // id → {weaponId,x,y}
 
 // Dedup sets
@@ -101,17 +103,18 @@ async function handleJoin(solo) {
 
   // Deterministic pickup positions (seed = room code hash, same for all clients)
   const seed = roomHash(room);
-  const ammoPos   = getSeededPositions(seed,         20, 100);
-  const weaponPos = getSeededPositions(seed + 99999,  5, 120).map((p,i)=>({
+  const ammoPos   = getSeededPositions(seed,          20, 100);
+  const weaponPos = getSeededPositions(seed + 99999,   5, 120).map((p,i)=>({
     ...p, weaponId: SPAWNABLE_WEAPONS[i % SPAWNABLE_WEAPONS.length]
   }));
+  const healthPos = getSeededPositions(seed + 55555,  10, 110);
 
   localPlayer = createLocalPlayer(myId, name, myColor);
 
   if (solo) {
-    // Pre-populate pickup state locally for solo
-    ammoPos.forEach((p,i)=>   { ammoPickups[`ammo_${i}`]  = {...p, pulse: Math.random()*Math.PI*2}; });
+    ammoPos.forEach((p,i)=>   { ammoPickups[`ammo_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
     weaponPos.forEach((p,i)=> { weaponPickups[`wp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
+    healthPos.forEach((p,i)=> { healthPickups[`hp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
     gamePhase='playing';
     hideLobby(); showHUD();
     updateWeaponHUD('pistol');
@@ -137,13 +140,14 @@ async function handleJoin(solo) {
       },
       onBulletFired: b => addRemoteBullet(b),
 
-      // Firebase sends the full pickups snapshot whenever it changes
       onPickupsInit: data => {
         ammoPickups   = {};
         weaponPickups = {};
+        healthPickups = {};
         for (const [id, pk] of Object.entries(data)) {
           if (pk.type==='ammo')   ammoPickups[id]   = pk;
           if (pk.type==='weapon') weaponPickups[id] = pk;
+          if (pk.type==='health') healthPickups[id] = pk;
         }
       },
 
@@ -173,7 +177,7 @@ async function handleJoin(solo) {
       angle: 0, hp: 100, maxHp: 100, alive: true,
       kills: 0, weaponId: 'pistol', ammo: WEAPON_DEFS.pistol.maxAmmo,
       joinedAt: Date.now(),
-    }, { ammo: ammoPos, weapons: weaponPos });
+    }, { ammo: ammoPos, weapons: weaponPos, health: healthPos });
 
     gamePhase='playing';
     hideLobby(); showHUD();
@@ -334,6 +338,18 @@ function checkPickups() {
   if (!localPlayer.alive) return;
   const r = PLAYER_RADIUS;
 
+  for (const [id, pk] of Object.entries(healthPickups)) {
+    if (Math.hypot(localPlayer.x-pk.x, localPlayer.y-pk.y) < r+14) {
+      localPlayer.hp = Math.min(localPlayer.maxHp, localPlayer.hp + 30);
+      delete healthPickups[id];
+      broadcastPickupTaken(id);
+      updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
+      setTimeout(()=>{
+        broadcastPickupRespawn(id, { ...pk, pulse: Math.random()*Math.PI*2 });
+      }, 12000);
+    }
+  }
+
   for (const [id, pk] of Object.entries(ammoPickups)) {
     if (Math.hypot(localPlayer.x-pk.x, localPlayer.y-pk.y) < r+14) {
       refillAmmo(localPlayer);
@@ -398,14 +414,13 @@ function checkOutgoingBulletHits() {
 // ── Shooting ──────────────────────────────────
 function handleShoot() {
   const def=WEAPON_DEFS[localPlayer.weaponId];
-  if (localPlayer.ammo<=0) { tryReload(localPlayer); return; }
+  if (localPlayer.ammo<=0) return; // out of ammo — must find a pickup
   if (def.burstCount) { fireBurstSequence(def); }
   else {
     const newBullets=fireBullets(localPlayer,def);
     broadcastBullets(newBullets);
     localPlayer.ammo=Math.max(0,localPlayer.ammo-1);
     localPlayer.shootCooldown=def.fireRate;
-    if (localPlayer.ammo===0) tryReload(localPlayer);
   }
 }
 
@@ -497,6 +512,7 @@ function draw(ts){
   drawMap(ctx,camX,camY,canvas.width,canvas.height);
   drawTeleporters(ctx,t);
   drawAmmoPickups(ctx,t,Object.values(ammoPickups));
+  drawHealthPickups(ctx,t,Object.values(healthPickups));
   drawWeaponPickups(ctx,t,Object.values(weaponPickups));
   drawDroppedWeapons(ctx,t,weaponDrops);
   drawBullets(ctx);

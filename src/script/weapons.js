@@ -128,6 +128,26 @@ export function drawWeaponPickups(ctx, t, weaponPickups) {
   }
 }
 
+export function drawHealthPickups(ctx, t, healthPickups) {
+  for (const pk of healthPickups) {
+    const pulse = 1 + 0.2 * Math.sin(t*2.8 + (pk.pulse||0));
+    ctx.save();
+    // Outer glow
+    ctx.beginPath(); ctx.arc(pk.x, pk.y, 11*pulse, 0, Math.PI*2);
+    ctx.fillStyle='rgba(0,255,80,0.07)'; ctx.fill();
+    // Circle backing
+    ctx.beginPath(); ctx.arc(pk.x, pk.y, 9, 0, Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fill();
+    ctx.strokeStyle='#00ff55'; ctx.lineWidth=1.8;
+    ctx.shadowBlur=14; ctx.shadowColor='#00ff55'; ctx.stroke();
+    // Cross
+    ctx.shadowBlur=8; ctx.fillStyle='#00ff55';
+    ctx.fillRect(pk.x-1.5, pk.y-5, 3, 10);   // vertical
+    ctx.fillRect(pk.x-5,   pk.y-1.5, 10, 3);  // horizontal
+    ctx.restore();
+  }
+}
+
 export function drawDroppedWeapons(ctx, t, weaponDrops) {
   for (const drop of Object.values(weaponDrops)) {
     const def = WEAPON_DEFS[drop.weaponId]; if (!def) continue;
