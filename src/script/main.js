@@ -268,6 +268,9 @@ async function handleJoin(solo) {
       onDamageReceived:  handleRemoteDamage,
       onRoomModeChanged: (meta) => {
         console.log('[MAIN] onRoomModeChanged fired, gamePhase:', gamePhase, 'meta:', meta);
+        // Ignore stale meta from a previous session — only respond to fresh starts
+        // A fresh start has a startedAt timestamp set by the host button click
+        if (!meta.startedAt) return;
         // ARCADE room ignores mode changes — always endless
         if (!isArcade) {
           gameMode  = meta.mode  || 'endless';
@@ -282,6 +285,7 @@ async function handleJoin(solo) {
           updateWeaponHUD(localPlayer.weaponId);
           updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
           updateHealthHUD(100, 100);
+          playMatchStart();
         }
       },
       onMatchEnded: (meta) => {

@@ -55,6 +55,11 @@ export async function joinRoom(playerData, pickupPositions) {
   const existingSnap = await fbGet(r(`rooms/${roomCode}/players`));
   const iAmHost = !existingSnap.exists() || Object.keys(existingSnap.val()).length === 0;
 
+  // If we're creating the room fresh, wipe any stale meta from a previous session
+  if (iAmHost) {
+    try { await fbRemove(r(`rooms/${roomCode}/meta`)); } catch(e) {}
+  }
+
   
   const playerRef = r(`rooms/${roomCode}/players/${myId}`);
   await fbSet(playerRef, { ...playerData, joinedAt: Date.now() });
@@ -206,8 +211,13 @@ export function broadcastKill(killerId, killerName, victimId, victimName) {
 
 export async function broadcastRoomMode(mode, killLimit) {
   try {
-    // Use fbSet (not update) on meta so the onValue listener always fires fresh
-    await fbSet(r(`rooms/${roomCode}/meta`), { mode, killLimit: killLimit||0, ended: false, winner: null });
+    await fbSet(r(`rooms/${roomCode}/meta`), {
+      mode,
+      killLimit: killLimit || 0,
+      ended: false,
+      winner: null,
+      startedAt: Date.now(),   // ← guests check this to ignore stale meta
+    });
     await fbUpdate(r(`rooms/${roomCode}`), { state: 'playing' });
     console.log('[NET] broadcastRoomMode wrote mode:', mode);
   } catch(e) { console.error('[NET] broadcastRoomMode FAILED:', e); }
