@@ -250,8 +250,6 @@ export async function broadcastMatchEnd(winnerName, winnerColor, reason) {
 export function leaveRoom() {
   try { fbRemove(r(`rooms/${roomCode}/players/${myId}`)); } catch(e) {}
 }
-
-// Broadcast a flashbang stun to a specific victim (by their player id)
 export function broadcastFlashbang(victimId, throwerId) {
   const evId = `flash_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   try {
@@ -264,13 +262,11 @@ export function broadcastFlashbang(victimId, throwerId) {
   } catch(e) {}
 }
 
-// Broadcast a placed flashbang device so other clients can see the countdown
 export function broadcastPlacedFlashbang(id, x, y, thrownBy) {
   try {
     fbSet(r(`rooms/${roomCode}/placedFlashbangs/${id}`), {
       id, x, y, thrownBy, placedAt: Date.now(),
     });
-    // Auto-clean after countdown + a small buffer
     setTimeout(() => {
       try { fbRemove(r(`rooms/${roomCode}/placedFlashbangs/${id}`)); } catch(e) {}
     }, 3000 + 4000);

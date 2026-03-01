@@ -53,8 +53,6 @@ export function updateHealthHUD(hp, maxHp) {
 export function updateAmmoHUD(ammo, maxAmmo, reloading) {
   const el = document.getElementById('ammo-display'); if (!el) return;
   el.innerHTML = '';
-
-  // For lasergun (maxAmmo=3) use special cells, else pips
   if (maxAmmo <= 5) {
     for (let i = 0; i < maxAmmo; i++) {
       const cell = document.createElement('div');
@@ -195,9 +193,6 @@ export function showKillStreakAnnouncement(count, playerColor) {
   clearTimeout(_streakTimeout);
   _streakTimeout = setTimeout(() => { el.style.opacity = '0'; }, 2200);
 }
-
-// ─── Unified bottom HUD updaters ────────────────────────────────────────────
-
 export function updateDashHUD(cooldownRemaining, maxCooldown) {
   const fill  = document.getElementById('dash-bar-fill');
   const label = document.getElementById('dash-ready-label');

@@ -1,36 +1,25 @@
 import { isSolid, TILE } from './map.js';
 
-export const FLASHBANG_RADIUS    = 400; // 10 tiles * 40px
+export const FLASHBANG_RADIUS    = 400;
 export const FLASHBANG_STUN_SECS = 3.0;
 export const FLASHBANG_COUNTDOWN = 3.0;
 export const FLASHBANG_MAX_CARRY = 3;
-
-// Keep legacy EMP export aliases so existing imports don't break
 export const EMP_RADIUS    = FLASHBANG_RADIUS;
-export const EMP_DAMAGE    = 0; // flashbangs don't deal damage
+export const EMP_DAMAGE    = 0;
 export const EMP_STUN_SECS = FLASHBANG_STUN_SECS;
 export const EMP_COUNTDOWN = FLASHBANG_COUNTDOWN;
 export const EMP_MAX_CARRY = FLASHBANG_MAX_CARRY;
 
-// ── Flashbang pickup objects on the map ──────────────────────────────────────
 export let empPickups = {};
-
-// ── Placed / counting-down flashbangs ────────────────────────────────────────
-// { id, x, y, timer, detonated, wave[], thrownBy }
 const _placed = [];
-
-// ── Player inventory ─────────────────────────────────────────────────────────
 let _empCount = 0;
 export function getEmpCount() { return _empCount; }
 export function addEmp()      { if (_empCount < FLASHBANG_MAX_CARRY) { _empCount++; return true; } return false; }
 
-// Callbacks set by main.js
 let _onDetonate = null;
 export function setEmpCallbacks(onDetonate) {
   _onDetonate = onDetonate;
 }
-
-// Place a flashbang at world position (x, y), thrownBy = player id (won't flash self)
 export function placeEmp(x, y, thrownBy, id) {
   if (_empCount <= 0) return false;
   _empCount--;
@@ -45,14 +34,11 @@ export function placeEmp(x, y, thrownBy, id) {
   return true;
 }
 
-// Called by network layer when another player places a flashbang
 export function addRemoteFlashbang(data) {
-  // Don't add duplicates
   if (_placed.some(fb => fb.id === data.id)) return;
-  // Compensate for network travel time so the timer stays in sync
   const age = (Date.now() - (data.placedAt || Date.now())) / 1000;
   const timer = Math.max(0, FLASHBANG_COUNTDOWN - age);
-  if (timer <= 0) return; // already detonated before we received it
+  if (timer <= 0) return;
   _placed.push({
     id: data.id,
     x: data.x,
@@ -61,11 +47,10 @@ export function addRemoteFlashbang(data) {
     detonated: false,
     waves: [],
     thrownBy: data.thrownBy || null,
-    remote: true, // don't re-broadcast or re-detonate flash effects
+    remote: true,
   });
 }
 
-// Called every frame — returns array of detonation events { x, y, thrownBy }
 export function updateEmps(dt) {
   const detonations = [];
   for (const fb of _placed) {
@@ -94,7 +79,6 @@ export function updateEmps(dt) {
   return detonations;
 }
 
-// Draw flashbang pickups on the map
 export function drawEmpPickups(ctx, t, pickups) {
   for (const pk of pickups) {
     const pulse = 1 + 0.22 * Math.sin(t * 2.8 + (pk.pulse || 0));
@@ -114,7 +98,6 @@ export function drawEmpPickups(ctx, t, pickups) {
   }
 }
 
-// Draw placed (counting-down) flashbangs and shockwaves
 export function drawPlacedEmps(ctx, t) {
   for (const fb of _placed) {
     ctx.save();
@@ -162,7 +145,6 @@ export function drawPlacedEmps(ctx, t) {
   }
 }
 
-// Returns the detonation object if the point is in radius, null otherwise
 export function checkEmpHit(x, y, detonations) {
   for (const d of detonations) {
     if (Math.hypot(x - d.x, y - d.y) <= FLASHBANG_RADIUS) return d;

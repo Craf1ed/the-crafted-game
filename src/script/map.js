@@ -164,7 +164,6 @@ export function randomOpenPos(avoidPoints=[], minDist=120) {
   return {x:tx*TILE+TILE/2, y:ty*TILE+TILE/2};
 }
 
-// --- Laser tag floor texture (generated once, reused as pattern) ---
 let _floorCanvas = null;
 
 function _buildFloorTexture() {
@@ -176,7 +175,6 @@ function _buildFloorTexture() {
   fx.fillStyle = '#06040e';
   fx.fillRect(0, 0, SIZE, SIZE);
 
-  // Subtle grid lines
   fx.strokeStyle = 'rgba(80,0,160,0.18)';
   fx.lineWidth = 1;
   for (let i = 0; i < SIZE; i += 40) {
@@ -184,7 +182,6 @@ function _buildFloorTexture() {
     fx.beginPath(); fx.moveTo(0, i); fx.lineTo(SIZE, i); fx.stroke();
   }
 
-  // Seeded deterministic RNG
   let _s = 0xdeadbeef;
   const rng = () => { _s ^= _s<<13; _s ^= _s>>>17; _s ^= _s<<5; return ((_s>>>0)/4294967296); };
 
@@ -197,7 +194,6 @@ function _buildFloorTexture() {
     'rgba(255,255,0,',
   ];
 
-  // Draw laser tag shapes
   for (let i = 0; i < 55; i++) {
     const x = rng() * SIZE;
     const y = rng() * SIZE;
@@ -216,22 +212,17 @@ function _buildFloorTexture() {
 
     fx.beginPath();
     if (type === 0) {
-      // L-shape
       fx.moveTo(0, -sz); fx.lineTo(0, 0); fx.lineTo(sz * 0.6, 0);
     } else if (type === 1) {
-      // Rectangle outline
       const w = sz * (0.5 + rng() * 0.8), h = sz * (0.5 + rng() * 0.8);
       fx.rect(-w/2, -h/2, w, h);
     } else if (type === 2) {
-      // Curly S-curve
       fx.moveTo(-sz/2, sz/3);
       fx.bezierCurveTo(-sz/2, -sz/3, sz/2, -sz/3, sz/2, sz/3);
     } else if (type === 3) {
-      // T-shape
       fx.moveTo(-sz/2, 0); fx.lineTo(sz/2, 0);
       fx.moveTo(0, 0);     fx.lineTo(0, sz * 0.7);
     } else {
-      // Z-zigzag
       fx.moveTo(-sz/2, -sz/3); fx.lineTo(sz/2, -sz/3);
       fx.lineTo(-sz/2,  sz/3); fx.lineTo(sz/2,  sz/3);
     }
@@ -239,7 +230,6 @@ function _buildFloorTexture() {
     fx.restore();
   }
 
-  // Glowing scattered dots
   for (let i = 0; i < 120; i++) {
     const x = rng() * SIZE, y = rng() * SIZE;
     const col = neonColors[Math.floor(rng() * neonColors.length)];
@@ -265,14 +255,12 @@ export function drawMap(ctx, camX, camY, canvasW, canvasH) {
 
   const pat = ctx.createPattern(_floorCanvas, 'repeat');
 
-  // Floor tiles first
   ctx.fillStyle = pat;
   for (let ty=sy;ty<ey;ty++)
     for (let tx=sx;tx<ex;tx++)
       if (MAP[ty][tx]!==1)
         ctx.fillRect(tx*TILE, ty*TILE, TILE, TILE);
 
-  // Walls on top
   for (let ty=sy;ty<ey;ty++)
     for (let tx=sx;tx<ex;tx++){
       if (MAP[ty][tx]===1){

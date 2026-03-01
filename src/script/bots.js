@@ -5,7 +5,7 @@ import { drawRemotePlayer, drawDeadPlayer, PLAYER_RADIUS } from './player.js';
 const BOT_COUNT     = 4;
 const RESPAWN_DELAY = 6000;
 
-const BOT_NAMES  = ['BOB', 'BILL', 'STEPHEN', 'ARNOLD'];
+const BOT_NAMES  = ['DONALD', 'NETANYAHU', 'JEFFERY', 'MASOUD'];
 const BOT_COLORS = ['#ff4444','#ff44ff','#ffaa00','#44aaff'];
 const WEAPON_POOL = ['pistol','pistol','shotgun','burst','sniper','trishot'];
 
@@ -83,7 +83,7 @@ export function tickBots(dt) {
   for (const bot of _bots) {
     if (!bot.alive) continue;
     _tickTimers(bot, dt);
-    if (bot.stunTimer > 0) continue; // stunned — skip AI/movement/shooting
+    if (bot.stunTimer > 0) continue;
     _decideState(bot);
     const { ax, ay } = _computeAccel(bot);
     _applyPhysics(bot, ax, ay, dt);

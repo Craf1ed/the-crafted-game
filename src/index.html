@@ -9,8 +9,6 @@
 <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
 </head>
 <body>
-
-<!-- ═══════════════════════════════ LOBBY ═══════════════════════════════════ -->
 <div id="lobby">
   <div class="lobby-bg-lines"></div>
 
@@ -89,18 +87,11 @@
     <span>Join any room to play instantly</span>
   </div>
 </div>
-
-<!-- ═══════════════════════════════ GAME CANVAS ══════════════════════════════ -->
 <canvas id="canvas"></canvas>
 <canvas id="minimap" width="260" height="195"></canvas>
 <div id="minimap-label">MINIMAP</div>
-
-<!-- ═══════════════════════════════ HUD ══════════════════════════════════════ -->
 <div id="hud">
-  <!-- Left column: HP + Weapon + Ammo -->
   <div id="hud-left">
-
-    <!-- Health -->
     <div class="hud-block" id="hud-health-block">
       <div class="hud-block-label"><i class="fa-solid fa-heart"></i> HEALTH</div>
       <div class="hud-health-row">
@@ -108,8 +99,6 @@
         <span id="hp-val">100</span>
       </div>
     </div>
-
-    <!-- Weapon + Ammo -->
     <div class="hud-block" id="hud-weapon-block">
       <div class="hud-block-label"><i class="fa-solid fa-gun"></i> WEAPON</div>
       <div class="hud-weapon-row">
@@ -118,7 +107,6 @@
       </div>
     </div>
 
-    <!-- Flashbang inventory -->
     <div class="hud-block" id="emp-hud-wrap" style="opacity:0.4">
       <div class="hud-block-label" style="color:rgba(255,255,255,.7)"><i class="fa-solid fa-bolt"></i> FLASHBANG &nbsp;<kbd style="font-family:'Share Tech Mono',monospace;font-size:.55rem;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);padding:1px 5px;color:rgba(255,255,255,.8);border-radius:2px;">E</kbd></div>
       <div class="hud-weapon-row" style="align-items:center;gap:10px;">
@@ -131,10 +119,8 @@
       </div>
     </div>
 
-    <!-- Abilities row: Dash + Laser -->
     <div class="hud-abilities">
 
-      <!-- Dash -->
       <div class="hud-ability-block">
         <div class="hud-ability-label" id="dash-icon"><i class="fa-solid fa-bolt"></i> DASH <kbd>SPACE</kbd></div>
         <div class="hud-bar-track">
@@ -142,8 +128,6 @@
         </div>
         <span class="hud-ability-val" id="dash-ready-label">READY</span>
       </div>
-
-      <!-- Laser charge (hidden when not using lasergun) -->
       <div class="hud-ability-block" id="laser-hud-wrap" style="opacity:0.38">
         <div class="hud-ability-label" style="color:#ff5555"><i class="fa-solid fa-crosshairs"></i> LASER <kbd>HOLD</kbd></div>
         <div class="hud-bar-track laser">
@@ -153,8 +137,6 @@
       </div>
 
     </div>
-
-    <!-- Controls hint -->
     <div id="controls-hint">
       <div class="ctrl-row"><kbd>WASD</kbd><span>Move</span></div>
       <div class="ctrl-row"><kbd>MOUSE</kbd><span>Aim &amp; Shoot</span></div>
@@ -173,8 +155,6 @@
 <div id="leaderboard"></div>
 <div id="kill-feed"></div>
 <div id="alert-flash"></div>
-
-<!-- ═══════════════════ ELIMINATED OVERLAY ══════════════════════════════════ -->
 <div id="eliminated-overlay">
   <div class="elim-inner">
     <div class="elim-skull"><i class="fa-solid fa-skull"></i></div>
@@ -188,8 +168,6 @@
   <i class="fa-solid fa-eye"></i> SPECTATING<br>
   <span style="font-size:.6rem;color:rgba(0,255,255,.2)">YOU HAVE BEEN ELIMINATED</span>
 </div>
-
-<!-- ═══════════════════ HOW TO PLAY ════════════════════════════════════════ -->
 <div id="howtoplay-overlay">
   <div id="howtoplay-box">
     <div id="howtoplay-title">HOW TO PLAY</div>

@@ -83,7 +83,7 @@ let ammoPickups   = {};
 let weaponPickups = {};
 let healthPickups = {};
 let weaponDrops   = {};
-let empPickupMap  = {}; // local EMP pickup state (mirrors empPickups)
+let empPickupMap  = {};
 
 let processedDamage = new Set();
 let processedKills  = new Set();
@@ -200,7 +200,6 @@ async function handleSolo() {
   weaponPos.forEach((p,i)=> { weaponPickups[`wp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
   healthPos.forEach((p,i)=> { healthPickups[`hp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
 
-  // Spawn 5 EMP pickups
   const empPos = getSeededPositions(seed + 77777, 5, 140);
   empPickupMap = {};
   empPos.forEach((p,i) => {
@@ -655,7 +654,6 @@ function handleRemoteFlashbang(ev) {
   if (processedFlash.has(ev.id)) return;
   processedFlash.add(ev.id);
   if (ev.victimId !== myId || !localPlayer?.alive) return;
-  // Apply stun + screen flash (same as local detonation)
   localPlayer.stunTimer = EMP_STUN_SECS;
   localPlayer.hitFlash  = 0.4;
   triggerFlashbangScreen();
@@ -745,7 +743,6 @@ function checkPickups() {
     }
   }
 
-  // Flashbang pickups
   for (const [id, pk] of Object.entries(empPickupMap)) {
     if (Math.hypot(localPlayer.x-pk.x, localPlayer.y-pk.y) < r+16) {
       if (addEmp()) {
@@ -753,13 +750,10 @@ function checkPickups() {
         playPickup('ammo');
         updateEmpHUD(getEmpCount());
         if (gameMode === 'solo') {
-          // Solo: just respawn locally
           setTimeout(() => {
             empPickupMap[id] = { ...pk, pulse: Math.random()*Math.PI*2 };
           }, 20000);
         } else {
-          // Multiplayer: remove from Firebase so other clients see it gone,
-          // then respawn it via Firebase after 20s
           broadcastPickupTaken(id);
           setTimeout(() => {
             broadcastPickupRespawn(id, { ...pk, type: 'flashbang', pulse: Math.random()*Math.PI*2 });
@@ -788,7 +782,7 @@ function checkOutgoingBulletHits() {
 function handleShoot() {
   const def=WEAPON_DEFS[localPlayer.weaponId];
   if (localPlayer.ammo<=0) return;
-  if (def.isLaser) return; // handled by updateLaser()
+  if (def.isLaser) return;
   if (def.burstCount) { fireBurstSequence(def); }
   else {
     const newBullets=fireBullets(localPlayer,def);
@@ -799,15 +793,14 @@ function handleShoot() {
   }
 }
 
-// ── Laser gun state ──────────────────────────────────────────────────────────
 let _laserChargeTimer = 0;
 let _laserCharging    = false;
 let _laserFiring      = false;
 let _laserBeam        = null;
-let _laserFireTimer   = 0;      // how long beam has been firing this trigger
-let _laserCooldown    = 0;      // cooldown timer after overheat
-const LASER_MAX_FIRE  = 5.0;    // seconds before forced shutdown
-const LASER_COOLDOWN  = 4.0;    // cooldown duration
+let _laserFireTimer   = 0;
+let _laserCooldown    = 0;
+const LASER_MAX_FIRE  = 5.0;
+const LASER_COOLDOWN  = 4.0;
 
 function _pointNearSegment(px, py, ax, ay, bx, by, r) {
   const dx=bx-ax, dy=by-ay, lenSq=dx*dx+dy*dy;
@@ -826,7 +819,6 @@ function updateLaser(dt) {
     return;
   }
 
-  // Tick cooldown
   if (_laserCooldown > 0) {
     _laserCooldown -= dt;
     if (_laserFiring) { stopLaserHum(); _laserFiring=false; }
@@ -855,7 +847,6 @@ function updateLaser(dt) {
 
       _laserFireTimer += dt;
 
-      // 5-second overheat cutoff
       if (_laserFireTimer >= LASER_MAX_FIRE) {
         stopLaserHum();
         playLaserOverheat();
@@ -899,7 +890,6 @@ function _updateLaserHUD() {
   if (!fill || !wrap) return;
 
   if (_laserCooldown > 0) {
-    // Overheat cooldown — show countdown, bar drains
     const pct = _laserCooldown / LASER_COOLDOWN;
     wrap.style.opacity = '1';
     fill.style.width = (pct * 100) + '%';
@@ -907,7 +897,6 @@ function _updateLaserHUD() {
     fill.style.boxShadow = '0 0 10px #ff6600';
     if (label) { label.textContent = 'COOL ' + _laserCooldown.toFixed(1)+'s'; label.style.color = '#ffaa00'; }
   } else if (_laserFiring) {
-    // Firing — bar shows remaining fire time
     const pct = 1 - (_laserFireTimer / LASER_MAX_FIRE);
     wrap.style.opacity = '1';
     fill.style.width = (pct * 100) + '%';
@@ -944,16 +933,12 @@ function fireBurstSequence(def) {
   fireOne();
 }
 
-
-
-// ── Flashbang screen-flash ───────────────────────────────────────────────────
 let _flashbangTimeout = null;
 function triggerFlashbangScreen() {
   const el = document.getElementById('flashbang-overlay');
   if (!el) return;
   el.style.opacity = '1';
   clearTimeout(_flashbangTimeout);
-  // Fade out over ~3 seconds matching stun duration
   let start = performance.now();
   const FADE = EMP_STUN_SECS * 1000;
   function fadeStep(now) {
@@ -1008,7 +993,6 @@ function update(dt, ts){
     updateAmmoHUD(localPlayer.ammo, def.maxAmmo, localPlayer.reloading);
     updateWeaponHUD(localPlayer.weaponId);
     updateDashHUD(localPlayer.dashCooldown, DASH_COOLDOWN);
-    // Laser HUD
     if (WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
       _updateLaserHUD();
     }
@@ -1023,13 +1007,11 @@ function update(dt, ts){
   updateBullets(dt);
   tickKillFeed();
 
-  // ── Flashbang update ─────────────────────────────────────────────────────
   if (gamePhase === 'playing') {
     const detonations = updateEmps(dt);
     for (const det of detonations) {
       playEmpDetonate();
 
-      // Flash remote players in radius — only the thrower's client broadcasts this
       if (gameMode !== 'solo' && !det.remote) {
         for (const [rid, rp] of Object.entries(remotePlayers)) {
           if (!rp.alive) continue;
@@ -1039,8 +1021,6 @@ function update(dt, ts){
         }
       }
 
-      // Stun local player only if they didn't throw it, and only for locally-originated detonations
-      // (remote detonations already sent a broadcastFlashbang to us if we were in range)
       if (!det.remote) {
         const localInRadius = localPlayer?.alive && Math.hypot(localPlayer.x-det.x, localPlayer.y-det.y) <= EMP_RADIUS;
         const localThrewIt  = det.thrownBy === myId;
@@ -1052,7 +1032,6 @@ function update(dt, ts){
         }
       }
 
-      // Stun bots (solo only)
       if (gameMode === 'solo') {
         for (const bot of getBots()) {
           if (!bot.alive) continue;
@@ -1063,12 +1042,10 @@ function update(dt, ts){
         }
       }
     }
-    // Tick stun on local player
     if (localPlayer?.stunTimer > 0) {
       localPlayer.stunTimer -= dt;
       if (localPlayer.stunTimer < 0) localPlayer.stunTimer = 0;
     }
-    // Stun overlay
     const stunEl = document.getElementById('stun-overlay');
     if (stunEl) stunEl.classList.toggle('active', (localPlayer?.stunTimer||0) > 0);
     updateEmpHUD(getEmpCount());
@@ -1140,8 +1117,6 @@ function draw(ts){
 
   if (localPlayer)
     localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t,isImmune) : drawDeadPlayer(ctx,localPlayer,t);
-
-  // Laser: aim preview while charging, active beam while firing
   if (localPlayer?.alive && WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
     if (_laserFiring && _laserBeam) {
       drawActiveLaser(ctx, _laserBeam, t);

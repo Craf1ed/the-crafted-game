@@ -9,10 +9,6 @@ body {
   user-select:none;
 }
 
-/* ══════════════════════════════════════════════
-   LOBBY
-══════════════════════════════════════════════ */
-
 #lobby {
   position:fixed; inset:0; z-index:100;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -69,7 +65,6 @@ body {
   text-transform:uppercase;
 }
 
-/* Panel */
 .panel {
   position:relative;
   border:1px solid rgba(120,80,255,.28);
@@ -122,7 +117,6 @@ body {
 }
 .panel input[type=text]::placeholder { color:rgba(120,80,255,.3); }
 
-/* Color picker */
 .color-label { margin-top:1.1rem !important; }
 #color-picker { display:flex; gap:8px; flex-wrap:wrap; margin-top:.45rem; }
 .color-swatch {
@@ -132,7 +126,6 @@ body {
 .color-swatch:hover { transform:scale(1.2); }
 .color-swatch.selected { border-color:#fff; transform:scale(1.22); }
 
-/* Buttons */
 .btn-group { display:flex; flex-direction:column; gap:.4rem; margin-top:1.2rem; }
 
 .btn {
@@ -186,10 +179,8 @@ body {
   box-shadow:0 0 18px rgba(255,80,180,.25);
 }
 
-/* host start */
 #host-start { margin-top:.7rem !important; }
 
-/* Difficulty picker */
 #solo-difficulty-row {
   display:flex; align-items:center; gap:8px;
   margin-top:.5rem;
@@ -220,10 +211,8 @@ body {
   box-shadow:0 0 8px rgba(120,80,255,.15);
 }
 
-/* Status message */
 #status-msg { margin-top:.8rem; font-size:.75rem; text-align:center; min-height:1.1em; color:#ff0; letter-spacing:.1em; }
 
-/* Lobby waiting */
 #lobby-waiting {
   display:none; margin-top:1.1rem;
   border-top:1px solid rgba(120,80,255,.14); padding-top:1rem;
@@ -243,7 +232,6 @@ body {
 .lp-name { flex:1; color:#c0a8ff; letter-spacing:.1em; }
 .lp-tag { color:rgba(140,100,255,.6); font-size:.58rem; }
 
-/* Mode picker */
 #mode-picker { display:flex; gap:4px; margin-top:.4rem; flex-wrap:wrap; }
 .mode-opt {
   display:flex; align-items:center; gap:5px;
@@ -273,7 +261,6 @@ body {
   background:rgba(160,120,255,.7); box-shadow:0 0 5px rgba(160,120,255,.5);
 }
 
-/* Footer */
 .lobby-footer {
   margin-top:1.2rem;
   font-size:.5rem;
@@ -283,7 +270,6 @@ body {
 }
 .lobby-footer .sep { color:rgba(120,80,255,.2); }
 
-/* How to play */
 #howtoplay-overlay {
   position:fixed; inset:0; z-index:60; display:none;
   align-items:center; justify-content:center;
@@ -327,15 +313,7 @@ body {
   letter-spacing:.2em; cursor:pointer; transition:all .18s;
 }
 #howtoplay-close:hover { background:rgba(140,80,255,.3); color:#fff; }
-
-/* ══════════════════════════════════════════════
-   GAME CANVAS
-══════════════════════════════════════════════ */
 #canvas { display:block; cursor:none; }
-
-/* ══════════════════════════════════════════════
-   HUD — bottom-left panel
-══════════════════════════════════════════════ */
 #hud {
   position:fixed; bottom:0; left:0;
   display:none;
@@ -370,7 +348,6 @@ body {
   display:flex; align-items:center; gap:6px;
 }
 
-/* Health bar */
 .hud-health-row {
   display:flex; align-items:center; gap:12px;
 }
@@ -393,7 +370,6 @@ body {
   transition:color .3s;
 }
 
-/* Weapon + ammo */
 .hud-weapon-row {
   display:flex; align-items:center; gap:12px; flex-wrap:wrap;
 }
@@ -413,7 +389,6 @@ body {
 }
 .ammo-pip.empty { background:rgba(255,220,0,.12); box-shadow:none; }
 
-/* Large cells for small-ammo weapons (lasergun) */
 .ammo-cell {
   width:30px; height:16px;
   background:linear-gradient(135deg,#ff4444,#ff2222);
@@ -427,7 +402,6 @@ body {
   box-shadow:none;
 }
 
-/* Reload indicator */
 #reload-indicator {
   position:fixed; bottom:90px; left:50%; transform:translateX(-50%);
   font-family:'Orbitron',monospace; font-size:.78rem; letter-spacing:.3em;
@@ -439,7 +413,6 @@ body {
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
 
-/* Abilities row */
 .hud-abilities {
   display:flex; gap:16px; padding-top:9px; flex-wrap:wrap;
 }
@@ -482,7 +455,6 @@ body {
   font-size:.62rem; color:#00ffff; letter-spacing:.1em; min-width:42px;
 }
 
-/* Controls hint */
 #controls-hint {
   display:flex; gap:12px; flex-wrap:wrap;
   padding-top:9px;
@@ -501,9 +473,6 @@ body {
 }
 .ctrl-row span { color:rgba(120,80,255,.38); }
 
-/* ══════════════════════════════════════════════
-   MINIMAP
-══════════════════════════════════════════════ */
 #minimap {
   position:fixed; bottom:16px; right:16px;
   border:1px solid rgba(120,80,255,.4);
@@ -518,9 +487,6 @@ body {
   font-family:'Orbitron',sans-serif;
 }
 
-/* ══════════════════════════════════════════════
-   LEADERBOARD + KILL FEED
-══════════════════════════════════════════════ */
 #leaderboard {
   position:fixed; top:16px; right:16px; z-index:10; pointer-events:none;
   background:rgba(4,2,14,.88);
@@ -558,18 +524,12 @@ body {
 }
 .kf-icon { color:rgba(255,255,255,.3); }
 
-/* ══════════════════════════════════════════════
-   ALERT FLASH
-══════════════════════════════════════════════ */
 #alert-flash {
   position:fixed; inset:0; pointer-events:none; z-index:5;
   box-shadow:inset 0 0 0 0 rgba(255,50,50,0); transition:box-shadow .06s;
 }
 #alert-flash.hit { box-shadow:inset 0 0 80px 28px rgba(255,40,40,.38); }
 
-/* ══════════════════════════════════════════════
-   ELIMINATED OVERLAY
-══════════════════════════════════════════════ */
 #eliminated-overlay {
   position:fixed; inset:0; display:none;
   align-items:center; justify-content:center;
@@ -599,9 +559,6 @@ body {
   margin-top:.3rem; animation:blink .8s infinite;
 }
 
-/* ══════════════════════════════════════════════
-   SPECTATOR
-══════════════════════════════════════════════ */
 #spectator-label {
   position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
   font-family:'Orbitron',monospace; font-size:.78rem; letter-spacing:.3em;
@@ -609,9 +566,6 @@ body {
   text-align:center; line-height:2;
 }
 
-/* ══════════════════════════════════════════════
-   GAME MSG
-══════════════════════════════════════════════ */
 #game-msg {
   position:fixed; inset:0; align-items:center; justify-content:center;
   background:rgba(0,0,0,.87); z-index:50;
@@ -621,9 +575,6 @@ body {
 
 #host-controls { display:none; }
 
-/* ══════════════════════════════════════════════
-   FLASHBANG HUD
-══════════════════════════════════════════════ */
 .emp-pip {
   width: 18px; height: 18px;
   border: 2px solid rgba(255,255,255,.25);
@@ -637,9 +588,6 @@ body {
   box-shadow: 0 0 10px rgba(255,255,255,.6), inset 0 0 4px rgba(255,255,255,.2);
 }
 
-/* ══════════════════════════════════════════════
-   STUN OVERLAY (flashbang static effect)
-══════════════════════════════════════════════ */
 #stun-overlay {
   position: fixed; inset: 0;
   pointer-events: none; z-index: 6;
@@ -663,10 +611,6 @@ body {
   55%  { opacity: 1 }
   100% { opacity: 0.92 }
 }
-
-/* ══════════════════════════════════════════════
-   FLASHBANG SCREEN OVERLAY
-══════════════════════════════════════════════ */
 #flashbang-overlay {
   position: fixed; inset: 0;
   pointer-events: none; z-index: 50;
