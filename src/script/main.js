@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════
-// MAIN.JS — Endless arcade mode, server-authoritative state
-// ═══════════════════════════════════════════════
-
 import { buildMap, drawMap, drawMinimap, drawTeleporters, TELEPORTERS,
          getSeededPositions, randomOpenPos, WORLD_W, WORLD_H } from './map.js';
 import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
@@ -84,27 +80,56 @@ let isHost     = false;
 let matchEnded = false;
 let isArcade   = false;
 let isImmune   = false;
-let killStreak = 0;       // current consecutive kills without dying
-let lastKillTs = 0;       // timestamp of last kill (streak resets after 8s inactivity)
+let killStreak = 0; 
+let lastKillTs = 0;   
+const RANDOM_NAMES = [
+  'VOSS','RENKO','MIRA','AXEL','SABLE','FROST','QUINN','DECKER',
+  'NOVA','REED','CAIRO','PIKE','ZARA','COLE','HEX','STONE',
+  'LIRA','BRAM','TYCE','NOX','VALE','RUSH','KADE','SERA',
+  'WOLF','TRACE','ONYX','BLAZE','CREST','WREN',
+];
+
+function pickRandomName() {
+  return RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+}
+
+function getOrPickName() {
+  return document.getElementById('player-name').value.trim() || null;
+}
+
 function onColorPick(c) { myColor=c; renderColorPicker(COLOR_PALETTE, myColor, onColorPick); }
 renderColorPicker(COLOR_PALETTE, myColor, onColorPick);
 
-document.getElementById('join-btn').addEventListener('click',  ()=>{
+document.getElementById('join-btn').addEventListener('click', () => {
   const room = document.getElementById('room-code').value.trim().toUpperCase() || 'ARCADE';
   isArcade = room === 'ARCADE';
   handleJoin(false);
 });
-document.getElementById('solo-btn').addEventListener('click',  ()=>handleSolo());
-document.getElementById('global-btn').addEventListener('click',()=>{
-  document.getElementById('room-code').value='ARCADE';
+
+let soloExpanded = false;
+document.getElementById('solo-btn').addEventListener('click', () => {
+  if (!soloExpanded) {
+    soloExpanded = true;
+    document.getElementById('solo-difficulty-row').style.display = 'flex';
+    document.getElementById('solo-btn').innerHTML = '<i class="fa-solid fa-user"></i> SOLO (OFFLINE) — PICK DIFFICULTY';
+    setLobbyStatus('Choose a difficulty to start', '#0a8');
+    return;
+  }
+  const diff = document.querySelector('input[name="diff"]:checked')?.value;
+  if (!diff) { setLobbyStatus('Pick a difficulty first', '#ff0'); return; }
+  handleSolo();
+});
+
+document.getElementById('global-btn').addEventListener('click', () => {
+  document.getElementById('room-code').value = 'ARCADE';
   isArcade = true;
   handleJoin(false);
 });
-document.getElementById('player-name').addEventListener('keydown', e=>{
-  if (e.key==='Enter') document.getElementById('room-code').focus();
+document.getElementById('player-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('room-code').focus();
 });
-document.getElementById('room-code').addEventListener('keydown', e=>{
-  if (e.key==='Enter') handleJoin(false);
+document.getElementById('room-code').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleJoin(false);
 });
 document.getElementById('host-start')?.addEventListener('click', () => {
   const modeEl = document.querySelector('input[name="gamemode"]:checked');
@@ -114,14 +139,12 @@ document.getElementById('host-start')?.addEventListener('click', () => {
   broadcastRoomMode(gameMode, killLimit);
 });
 
-
 document.querySelectorAll('input[name="gamemode"]').forEach(radio => {
   radio.addEventListener('change', () => {
     document.querySelectorAll('.mode-opt').forEach(el => el.classList.remove('active'));
     radio.closest('.mode-opt')?.classList.add('active');
   });
 });
-
 const defaultRadio = document.querySelector('input[name="gamemode"]:checked');
 defaultRadio?.closest('.mode-opt')?.classList.add('active');
 
@@ -129,16 +152,19 @@ document.querySelectorAll('input[name="diff"]').forEach(radio => {
   radio.addEventListener('change', () => {
     document.querySelectorAll('.diff-opt').forEach(el => el.classList.remove('active'));
     radio.closest('.diff-opt')?.classList.add('active');
+    const label = radio.closest('.diff-opt')?.textContent?.trim() || '';
+    document.getElementById('solo-btn').innerHTML =
+      `<i class="fa-solid fa-play"></i> START — ${label}`;
+    setLobbyStatus('', '#0a8');
   });
 });
-document.querySelector('input[name="diff"]:checked')?.closest('.diff-opt')?.classList.add('active');
 
 async function handleSolo() {
-  const name = document.getElementById('player-name').value.trim();
-  if (!name)         { setLobbyStatus('Enter a callsign!'); return; }
-  if (name.length<2) { setLobbyStatus('Name too short (min 2)'); return; }
+  const typed = document.getElementById('player-name').value.trim();
+  const name  = typed || pickRandomName();
+  if (typed && typed.length < 2) { setLobbyStatus('Name too short (min 2)'); return; }
 
-  initAudio();  // start audio context on user gesture
+  initAudio();
 
   const diff = document.querySelector('input[name="diff"]:checked')?.value || 'medium';
   setDifficulty(diff);
@@ -186,27 +212,26 @@ async function handleSolo() {
 
 
 async function handleJoin(solo) {
-  const name = document.getElementById('player-name').value.trim();
-  const room = document.getElementById('room-code').value.trim().toUpperCase() || 'ARCADE';
+  const typed = document.getElementById('player-name').value.trim();
+  const room  = document.getElementById('room-code').value.trim().toUpperCase() || 'ARCADE';
 
-  if (!name)         { setLobbyStatus('Enter a callsign!'); return; }
-  if (name.length<2) { setLobbyStatus('Name too short (min 2)'); return; }
+  if (typed && typed.length < 2) { setLobbyStatus('Name too short (min 2)'); return; }
 
-  initAudio(); // user gesture — safe to start AudioContext
+  initAudio();
 
-  // ARCADE room is always endless, no host lock
   if (room === 'ARCADE') isArcade = true;
 
   setLobbyStatus('Connecting...','#0ff');
   buildMap();
 
-  // Deterministic pickup positions (seed = room code hash, same for all clients)
   const seed = roomHash(room);
   const ammoPos   = getSeededPositions(seed,          20, 100);
   const weaponPos = getSeededPositions(seed + 99999,   5, 120).map((p,i)=>({
     ...p, weaponId: SPAWNABLE_WEAPONS[i % SPAWNABLE_WEAPONS.length]
   }));
   const healthPos = getSeededPositions(seed + 55555,  10, 110);
+
+  let name = typed || pickRandomName();
 
   localPlayer = createLocalPlayer(myId, name, myColor);
 
@@ -219,7 +244,6 @@ async function handleJoin(solo) {
         if (!remotePlayers[id]) remotePlayers[id]={};
         Object.assign(remotePlayers[id], data);
         updateRemoteRender(id, data);
-        // Keep lobby player list live for everyone waiting
         if (gamePhase === 'lobby') {
           renderLobbyPlayers({ [myId]: localPlayer, ...remotePlayers }, myId);
         }
@@ -233,7 +257,6 @@ async function handleJoin(solo) {
       },
       onBulletFired: b => {
         addRemoteBullet(b);
-        // Pan sound based on where the bullet comes from relative to screen center
         if (localPlayer?.alive) {
           const pan = Math.max(-1, Math.min(1, (b.x - localPlayer.x) / (canvas.width * 0.6)));
           playShoot(b.weaponId || 'pistol', pan);
@@ -251,10 +274,8 @@ async function handleJoin(solo) {
         }
       },
 
-      // Weapon drops — receive full snapshot each time
       onWeaponDropped: (did, drop) => {
         if (did==='__snapshot__') {
-          // Rebuild drops from snapshot, remove ones no longer present
           const newIds = new Set(Object.keys(drop));
           for (const id of Object.keys(weaponDrops))
             if (!newIds.has(id)) delete weaponDrops[id];
@@ -268,15 +289,11 @@ async function handleJoin(solo) {
       onDamageReceived:  handleRemoteDamage,
       onRoomModeChanged: (meta) => {
         console.log('[MAIN] onRoomModeChanged fired, gamePhase:', gamePhase, 'meta:', meta);
-        // Ignore stale meta from a previous session — only respond to fresh starts
-        // A fresh start has a startedAt timestamp set by the host button click
         if (!meta.startedAt) return;
-        // ARCADE room ignores mode changes — always endless
         if (!isArcade) {
           gameMode  = meta.mode  || 'endless';
           killLimit = meta.killLimit || 10;
         }
-        // Launch anyone still in lobby — idempotent, safe to call multiple times
         if (gamePhase === 'lobby') {
           console.log('[MAIN] launching game for', isHost ? 'HOST' : 'GUEST');
           gamePhase = 'playing';
@@ -311,8 +328,17 @@ async function handleJoin(solo) {
       },
     });
 
-    const taken = await checkNameTaken(room, name);
-    if (taken) { setLobbyStatus('Name taken in this room!','#f44'); return; }
+    if (typed) {
+      const taken = await checkNameTaken(room, name);
+      if (taken) { setLobbyStatus('Name taken in this room!', '#f44'); return; }
+    } else {
+      let tries = 0;
+      while (await checkNameTaken(room, name) && tries < 10) {
+        name = pickRandomName();
+        tries++;
+      }
+      localPlayer.name = name;
+    }
 
     const hostResult = await joinRoom({
       name, color: myColor, id: myId,
@@ -327,7 +353,6 @@ async function handleJoin(solo) {
     document.getElementById('lobby-waiting').style.display='block';
 
     if (isArcade) {
-      // ARCADE: always endless, auto-start immediately for everyone
       gameMode  = 'endless';
       gamePhase = 'playing';
       hideLobby(); showHUD();
@@ -343,7 +368,6 @@ async function handleJoin(solo) {
       setLobbyStatus('Waiting for host to start the match…','#0a8');
     }
 
-    // Show current player list immediately for everyone in lobby
     renderLobbyPlayers({ [myId]: localPlayer, ...remotePlayers }, myId);
     startGameLoop();
 
@@ -418,11 +442,8 @@ function showHowToPlay(mode, limit) {
   };
 }
 
-
-// ── Kill streak helper ─────────────────────────
 function _registerKill(killer, victimName, victimColor) {
   const now = Date.now();
-  // Reset streak if more than 8 seconds since last kill
   if (now - lastKillTs > 8000) killStreak = 0;
   killStreak++;
   lastKillTs = now;
@@ -438,11 +459,10 @@ function _registerKill(killer, victimName, victimColor) {
 function handleDeath(killerName, killerColor) {
   localPlayer.hp    = 0;
   localPlayer.alive = false;
-  killStreak = 0; // reset streak on death
+  killStreak = 0;
   playDeath();
 
   if (gameMode === 'solo') {
-    // Solo: game over, show results
     setTimeout(() => showSoloGameOver(killerName, killerColor), 800);
     showEliminatedOverlay(killerName, killerColor);
     return;
@@ -450,7 +470,6 @@ function handleDeath(killerName, killerColor) {
 
   showEliminatedOverlay(killerName, killerColor);
 
-  // Update respawn overlay text each second
   respawnTimer = RESPAWN_SECS;
   updateRespawnUI();
   if (respawnHandle) clearInterval(respawnHandle);
@@ -461,7 +480,6 @@ function handleDeath(killerName, killerColor) {
       clearInterval(respawnHandle);
       respawnHandle = null;
       if (gameMode === 'lms') {
-        // No respawn in LMS — stay dead and spectate
         const el = document.getElementById('respawn-count');
         if (el) el.textContent = 'YOU ARE ELIMINATED — SPECTATING';
       } else {
@@ -510,7 +528,6 @@ function updateRespawnUI() {
   const el = document.getElementById('eliminated-overlay');
   if (!el) return;
   el.style.display = 'flex';
-  // Update the respawn countdown in the overlay
   let countEl = document.getElementById('respawn-count');
   if (!countEl) {
     countEl = document.createElement('p');
@@ -564,7 +581,6 @@ function handleRemoteDamage(ev) {
   updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
 
   if (localPlayer.hp <= 0) {
-    // Drop current weapon
     if (localPlayer.weaponId !== 'pistol') {
       const dp = randomOpenPos([],80);
       const did = `drop_${Date.now()}_${myId}`;
@@ -643,7 +659,6 @@ function checkPickups() {
       delete ammoPickups[id];
       broadcastPickupTaken(id);
       playPickup('ammo');
-      // Respawn ammo after 8s at same slot
       setTimeout(()=>{
         const newPk = { ...pk, pulse: Math.random()*Math.PI*2 };
         broadcastPickupRespawn(id, newPk);
@@ -663,7 +678,6 @@ function checkPickups() {
       playPickup('weapon');
       delete weaponPickups[id];
       broadcastPickupTaken(id);
-      // Respawn weapon pickup after 15s
       setTimeout(()=>{
         broadcastPickupRespawn(id, { ...wp, pulse: Math.random()*Math.PI*2 });
       }, 15000);
@@ -686,7 +700,6 @@ function checkPickups() {
   }
 }
 
-// ── Bullet hits ───────────────────────────────
 function checkOutgoingBulletHits() {
   for (let i=bullets.length-1;i>=0;i--) {
     const b=bullets[i];
@@ -772,7 +785,6 @@ function update(dt, ts){
     updateWeaponHUD(localPlayer.weaponId);
     updateDashHUD(localPlayer.dashCooldown, DASH_COOLDOWN);
   } else if (gamePhase==='playing' && !localPlayer.alive) {
-    // Spectate nearest alive player
     const alive=Object.values(remotePlayers).find(p=>p.alive);
     if (alive){
       camX=Math.max(0,Math.min(WORLD_W-canvas.width,  alive.x-canvas.width/2));
@@ -789,7 +801,6 @@ function update(dt, ts){
     checkBotCollisions(myId);
   }
 
-  // Win condition (host only)
   if (isHost && gamePhase==='playing' && !matchEnded) checkWinCondition();
 }
 

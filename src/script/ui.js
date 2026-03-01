@@ -143,7 +143,6 @@ export function triggerHitFlash() {
   _flashTimer=setTimeout(()=>el.classList.remove('hit'),90);
 }
 
-// ── Kill streak announcement ───────────────────
 const STREAK_LABELS = {
   2: { text: 'DOUBLE KILL',   color: '#ffff00', glow: '#aaaa00' },
   3: { text: 'TRIPLE KILL',   color: '#ff8800', glow: '#884400' },
@@ -191,7 +190,6 @@ export function showKillStreakAnnouncement(count, playerColor) {
   }, 2200);
 }
 
-// ── Dash cooldown HUD ──────────────────────────
 export function updateDashHUD(cooldownRemaining, maxCooldown) {
   let el = document.getElementById('dash-hud');
   if (!el) {

@@ -1,8 +1,3 @@
-// ═══════════════════════════════════════════════
-// AUDIO.JS — 100% synthesized via Web Audio API
-// No files needed. All sounds built from oscillators + noise.
-// ═══════════════════════════════════════════════
-
 let _ctx = null;
 let masterVol = 0.7;
 let enabled = true;
@@ -16,8 +11,6 @@ function getCtx() {
 export function initAudio() { getCtx(); }
 export function setMasterVolume(v) { masterVol = Math.max(0, Math.min(1, v)); }
 export function setEnabled(v) { enabled = v; }
-
-// ── Core helpers ───────────────────────────────
 
 function master() {
   const ctx = getCtx();
@@ -61,13 +54,10 @@ function filter(type, freq, dest, ctx) {
   return f;
 }
 
-// ── Shoot sounds ───────────────────────────────
-
 export function playShoot(weaponId, pan = 0) {
   if (!enabled) return;
   const ctx = getCtx();
   const now = ctx.currentTime;
-  // Route through a panner so remote shots have positional audio
   const panner = ctx.createStereoPanner();
   panner.pan.value = Math.max(-1, Math.min(1, pan));
   const m = ctx.createGain();
@@ -167,8 +157,6 @@ export function playShoot(weaponId, pan = 0) {
   }
 }
 
-// ── Reload ─────────────────────────────────────
-
 export function playReload() {
   if (!enabled) return;
   const ctx = getCtx();
@@ -184,8 +172,6 @@ export function playReload() {
   click(now + 0.18, 1100);
   click(now + 0.42, 1400);
 }
-
-// ── Hit ────────────────────────────────────────
 
 export function playHit(isPlayer = true) {
   if (!enabled) return;
@@ -209,8 +195,6 @@ export function playHit(isPlayer = true) {
     o.start(now); o.stop(now + 0.09);
   }
 }
-
-// ── Pickups ────────────────────────────────────
 
 export function playPickup(type) {
   if (!enabled) return;
@@ -241,8 +225,6 @@ export function playPickup(type) {
   }
 }
 
-// ── Teleport ───────────────────────────────────
-
 export function playTeleport() {
   if (!enabled) return;
   const ctx = getCtx();
@@ -268,8 +250,6 @@ export function playTeleport() {
   osc('sine', 2400, now + 0.1, 0.18, 0.15, 0.001, m, ctx);
 }
 
-// ── Death ──────────────────────────────────────
-
 export function playDeath() {
   if (!enabled) return;
   const ctx = getCtx();
@@ -291,8 +271,6 @@ export function playDeath() {
   osc('sine', 900, now, 0.4, 0.2, 0.001, m, ctx);
 }
 
-// ── Respawn ────────────────────────────────────
-
 export function playRespawn() {
   if (!enabled) return;
   const ctx = getCtx();
@@ -305,8 +283,6 @@ export function playRespawn() {
   osc('sine', 1320, now + 5 * 0.055, 0.15, 0.25, 0.001, m, ctx);
 }
 
-// ── Dash ───────────────────────────────────────
-
 export function playDash() {
   if (!enabled) return;
   const ctx = getCtx();
@@ -318,8 +294,6 @@ export function playDash() {
   noise(0.14, 0.55, 0.001, f, ctx, now);
   osc('sine', 100, now, 0.08, 0.35, 0.001, m, ctx);
 }
-
-// ── Kill streaks ───────────────────────────────
 
 export function playKillStreak(count) {
   if (!enabled) return;
@@ -346,8 +320,6 @@ export function playKillStreak(count) {
   const f = filter('bandpass', 1800, m, ctx);
   noise(0.08, 0.3 + tier * 0.08, 0.001, f, ctx, now + (freqs.length - 1) * 0.07);
 }
-
-// ── Match events ───────────────────────────────
 
 export function playMatchStart() {
   if (!enabled) return;

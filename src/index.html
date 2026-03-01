@@ -23,12 +23,12 @@
 
     <button class="btn" id="join-btn"><i class="fa-solid fa-door-open"></i> JOIN / CREATE ROOM</button>
     <button class="btn secondary" id="solo-btn"><i class="fa-solid fa-user"></i> SOLO (OFFLINE)</button>
-    <div id="solo-difficulty-row">
+    <div id="solo-difficulty-row" style="display:none">
       <span class="diff-label">DIFFICULTY</span>
       <div id="diff-picker">
-        <label class="diff-opt active"><input type="radio" name="diff" value="noob"> NOOB</label>
+        <label class="diff-opt"><input type="radio" name="diff" value="noob"> NOOB</label>
         <label class="diff-opt"><input type="radio" name="diff" value="easy"> EASY</label>
-        <label class="diff-opt active-default"><input type="radio" name="diff" value="medium" checked> MEDIUM</label>
+        <label class="diff-opt"><input type="radio" name="diff" value="medium"> MEDIUM</label>
         <label class="diff-opt"><input type="radio" name="diff" value="hard"> HARD</label>
         <label class="diff-opt"><input type="radio" name="diff" value="god"> GOD</label>
       </div>
@@ -91,8 +91,7 @@
 <div id="kill-feed"></div>
 <div id="controls-hint">
   <i class="fa-solid fa-arrow-up-right-and-arrow-down-left-from-center"></i> WASD — MOVE &nbsp;·&nbsp; <i class="fa-regular fa-circle-dot"></i> MOUSE — AIM<br>
-  <i class="fa-solid fa-computer-mouse"></i> CLICK — SHOOT &nbsp;·&nbsp; <i class="fa-solid fa-r"></i> — RELOAD<br>
-  <i class="fa-solid fa-bolt"></i> SPACE — DASH
+  <i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE — SHOOT &nbsp;·&nbsp; <i class="fa-solid fa-r"></i> — RELOAD
 </div>
 <div id="alert-flash"></div>
 

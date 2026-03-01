@@ -55,7 +55,6 @@ export async function joinRoom(playerData, pickupPositions) {
   const existingSnap = await fbGet(r(`rooms/${roomCode}/players`));
   const iAmHost = !existingSnap.exists() || Object.keys(existingSnap.val()).length === 0;
 
-  // If we're creating the room fresh, wipe any stale meta from a previous session
   if (iAmHost) {
     try { await fbRemove(r(`rooms/${roomCode}/meta`)); } catch(e) {}
   }
@@ -216,7 +215,7 @@ export async function broadcastRoomMode(mode, killLimit) {
       killLimit: killLimit || 0,
       ended: false,
       winner: null,
-      startedAt: Date.now(),   // ← guests check this to ignore stale meta
+      startedAt: Date.now(),
     });
     await fbUpdate(r(`rooms/${roomCode}`), { state: 'playing' });
     console.log('[NET] broadcastRoomMode wrote mode:', mode);
