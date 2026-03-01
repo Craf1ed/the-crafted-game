@@ -249,14 +249,14 @@ async function handleJoin(solo) {
           gameMode  = meta.mode  || 'endless';
           killLimit = meta.killLimit || 10;
         }
-        // Anyone who isn't in-game yet gets launched in (host already handled separately)
-        if (gamePhase !== 'playing' && gamePhase !== 'ended') {
+        // Launch anyone still in lobby — idempotent, safe to call multiple times
+        if (gamePhase === 'lobby') {
           gamePhase = 'playing';
           hideLobby(); showHUD();
           showHowToPlay(isArcade ? 'endless' : gameMode, killLimit);
           updateWeaponHUD(localPlayer.weaponId);
           updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
-          updateHealthHUD(100,100);
+          updateHealthHUD(100, 100);
         }
       },
       onMatchEnded: (meta) => {

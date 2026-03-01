@@ -97,6 +97,12 @@ export async function joinRoom(playerData, pickupPositions) {
     await fbUpdate(r(`rooms/${roomCode}`), { state: 'lobby', createdAt: Date.now() });
   }
 
+  // If game already started (late joiner), fire onRoomModeChanged immediately from stored meta
+  const metaSnap = await fbGet(r(`rooms/${roomCode}/meta`));
+  if (metaSnap.exists() && metaSnap.val().mode) {
+    setTimeout(() => onRoomModeChanged(metaSnap.val()), 0);
+  }
+
   let knownPlayers = new Set();
 
   // Players
@@ -142,11 +148,11 @@ export async function joinRoom(playerData, pickupPositions) {
     for (const [, k] of Object.entries(snap.val())) onKillRegistered(k);
   });
 
-  // Room meta (game mode, match end)
+  // Room meta (game mode, match end) — fires on any change including initial load
   fbOnValue(r(`rooms/${roomCode}/meta`), snap => {
     if (!snap.exists()) return;
     const d = snap.val();
-    if (d.mode) onRoomModeChanged(d);
+    if (d.mode && !d.ended) onRoomModeChanged(d);
     if (d.ended) onMatchEnded(d);
   });
 
@@ -231,8 +237,11 @@ export function broadcastKill(killerId, killerName, victimId, victimName) {
 }
 
 // ── Room mode (host only) ─────────────────────
-export function broadcastRoomMode(mode, killLimit) {
-  try { fbUpdate(r(`rooms/${roomCode}/meta`), { mode, killLimit: killLimit||0, ended:false, winner:null }); } catch(e) {}
+export async function broadcastRoomMode(mode, killLimit) {
+  try {
+    await fbUpdate(r(`rooms/${roomCode}`), { state: 'playing' });
+    await fbUpdate(r(`rooms/${roomCode}/meta`), { mode, killLimit: killLimit||0, ended:false, winner:null });
+  } catch(e) { console.error('broadcastRoomMode failed:', e); }
 }
 
 export function broadcastMatchEnd(winnerName, winnerColor, reason) {

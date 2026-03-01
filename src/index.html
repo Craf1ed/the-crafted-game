@@ -35,23 +35,26 @@
 
       <!-- Host-only game mode picker -->
       <div id="host-controls">
-        <div class="lw-title" style="margin-top:1rem">GAME MODE</div>
+        <div class="lw-title" style="margin-top:.9rem">GAME MODE</div>
         <div id="mode-picker">
-          <label class="mode-opt">
+          <label class="mode-opt active">
             <input type="radio" name="gamemode" value="endless" checked>
-            <span><i class="fa-solid fa-infinity"></i> ENDLESS</span>
+            <i class="fa-solid fa-infinity"></i>
+            <span>ENDLESS</span>
           </label>
           <label class="mode-opt">
             <input type="radio" name="gamemode" value="lms">
-            <span><i class="fa-solid fa-skull-crossbones"></i> LAST MAN STANDING</span>
+            <i class="fa-solid fa-skull-crossbones"></i>
+            <span>LAST MAN</span>
           </label>
           <label class="mode-opt">
             <input type="radio" name="gamemode" value="killlimit">
-            <span><i class="fa-solid fa-trophy"></i> KILL LIMIT</span>
-            <input type="number" id="kill-limit-val" value="10" min="1" max="99" style="width:44px;margin-left:8px">
+            <i class="fa-solid fa-trophy"></i>
+            <span>KILL LIMIT</span>
+            <input type="number" id="kill-limit-val" value="10" min="1" max="99">
           </label>
         </div>
-        <button class="btn" id="host-start" style="margin-top:.8rem"><i class="fa-solid fa-play"></i> START MATCH</button>
+        <button class="btn" id="host-start"><i class="fa-solid fa-play"></i> START MATCH</button>
       </div>
     </div>
   </div>
