@@ -3,7 +3,7 @@ import { buildMap, loadMap, drawMap, drawMinimap, drawTeleporters, TELEPORTERS,
 import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
          fireBullets, addRemoteBullet, updateBullets,
          drawBullets, drawAmmoPickups, drawWeaponPickups, drawDroppedWeapons,
-         drawHealthPickups } from './weapons.js';
+         drawHealthPickups, drawLaserChargeBeam, laserCharge } from './weapons.js';
 import { createLocalPlayer, updateLocalPlayer, tryReload, tryDash,
          equipWeapon, refillAmmo,
          drawLocalPlayer, drawRemotePlayer, drawDeadPlayer,
@@ -20,7 +20,7 @@ import { hideLobby, showHUD, setLobbyStatus,
          renderLeaderboard, addKillFeed, tickKillFeed,
          showEliminatedOverlay, hideRespawnOverlay,
          drawCrosshair, triggerHitFlash,
-         showKillStreakAnnouncement, updateDashHUD } from './ui.js';
+         showKillStreakAnnouncement, updateDashHUD, updateLaserChargeHUD } from './ui.js';
 import { initBots, tickBots, checkBotCollisions, drawBots, getBots, setDifficulty, setImmune } from './bots.js';
 import {
   initAudio, playShoot, playReload, playHit, playPickup,
@@ -717,9 +717,14 @@ function checkOutgoingBulletHits() {
 }
 
 
+// Laser charge state
+let laserChargeTimer = 0;
+let laserCharging = false;
+
 function handleShoot() {
   const def=WEAPON_DEFS[localPlayer.weaponId];
   if (localPlayer.ammo<=0) return;
+  if (def.isLaser) return; // handled by updateLaserCharge()
   if (def.burstCount) { fireBurstSequence(def); }
   else {
     const newBullets=fireBullets(localPlayer,def);
@@ -727,6 +732,33 @@ function handleShoot() {
     playShoot(localPlayer.weaponId);
     localPlayer.ammo=Math.max(0,localPlayer.ammo-1);
     localPlayer.shootCooldown=def.fireRate;
+  }
+}
+
+function updateLaserCharge(dt) {
+  const def = WEAPON_DEFS[localPlayer.weaponId];
+  if (!def || !def.isLaser) {
+    if (laserCharging) { laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; }
+    return;
+  }
+  if (!localPlayer.alive || localPlayer.reloading || localPlayer.ammo<=0 || localPlayer.shootCooldown>0) {
+    laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; return;
+  }
+  if (mouseDown) {
+    if (!laserCharging) { laserCharging=true; laserChargeTimer=0; }
+    laserChargeTimer = Math.min(laserChargeTimer+dt, def.chargeTime);
+    laserCharge.charging=true;
+    laserCharge.progress = laserChargeTimer / def.chargeTime;
+    if (laserChargeTimer >= def.chargeTime) {
+      laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; laserChargeTimer=0;
+      const newBullets=fireBullets(localPlayer,def);
+      broadcastBullets(newBullets);
+      playShoot('sniper');
+      localPlayer.ammo=Math.max(0,localPlayer.ammo-1);
+      localPlayer.shootCooldown=def.fireRate;
+    }
+  } else {
+    if (laserCharging) { laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; laserChargeTimer=0; }
   }
 }
 
@@ -770,7 +802,10 @@ function update(dt, ts){
     updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
 
     if (mouseDown && localPlayer.shootCooldown<=0
-        && !localPlayer.reloading && localPlayer.ammo>0) handleShoot();
+        && !localPlayer.reloading && localPlayer.ammo>0
+        && !WEAPON_DEFS[localPlayer.weaponId]?.isLaser) handleShoot();
+
+    updateLaserCharge(dt);
 
     camX=Math.max(0,Math.min(WORLD_W-canvas.width,  localPlayer.x-canvas.width/2));
     camY=Math.max(0,Math.min(WORLD_H-canvas.height, localPlayer.y-canvas.height/2));
@@ -786,6 +821,9 @@ function update(dt, ts){
     updateAmmoHUD(localPlayer.ammo, def.maxAmmo, localPlayer.reloading);
     updateWeaponHUD(localPlayer.weaponId);
     updateDashHUD(localPlayer.dashCooldown, DASH_COOLDOWN);
+    if (WEAPON_DEFS[localPlayer.weaponId]?.isLaser)
+      updateLaserChargeHUD(laserCharge.charging, laserCharge.progress);
+    else updateLaserChargeHUD(false, 0);
   } else if (gamePhase==='playing' && !localPlayer.alive) {
     const alive=Object.values(remotePlayers).find(p=>p.alive);
     if (alive){
@@ -861,6 +899,10 @@ function draw(ts){
 
   if (localPlayer)
     localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t,isImmune) : drawDeadPlayer(ctx,localPlayer,t);
+
+  // Laser charge beam (drawn on top of player, in world space)
+  if (localPlayer?.alive && laserCharge.charging) drawLaserChargeBeam(ctx, localPlayer);
+
   ctx.restore();
 
   if (localPlayer?.alive && gamePhase==='playing')

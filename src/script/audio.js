@@ -12,6 +12,44 @@ export function initAudio() { getCtx(); }
 export function setMasterVolume(v) { masterVol = Math.max(0, Math.min(1, v)); }
 export function setEnabled(v) { enabled = v; }
 
+let _bgmAudio = null;
+let _bgmGain = null;
+let _bgmVolume = 0.35;
+
+export function startBGM(src = 'music.mp3') {
+  if (_bgmAudio) return;
+  _bgmAudio = new Audio(src);
+  _bgmAudio.loop = true;
+
+  const ctx = getCtx();
+  const source = ctx.createMediaElementSource(_bgmAudio);
+  _bgmGain = ctx.createGain();
+  _bgmGain.gain.value = _bgmVolume * masterVol;
+  source.connect(_bgmGain);
+  _bgmGain.connect(ctx.destination);
+
+  _bgmAudio.play().catch(() => {
+    const resume = () => {
+      _bgmAudio.play().catch(() => {});
+    };
+    document.addEventListener('click', resume, { once: true });
+    document.addEventListener('keydown', resume, { once: true });
+  });
+}
+
+export function stopBGM() {
+  if (!_bgmAudio) return;
+  _bgmAudio.pause();
+  _bgmAudio.currentTime = 0;
+  _bgmAudio = null;
+  _bgmGain = null;
+}
+
+export function setBGMVolume(v) {
+  _bgmVolume = Math.max(0, Math.min(1, v));
+  if (_bgmGain) _bgmGain.gain.value = _bgmVolume * masterVol;
+}
+
 function master(ctx) {
   const g = ctx.createGain();
   g.gain.value = masterVol;

@@ -1,14 +1,15 @@
 import { isSolid } from './map.js';
 
 export const WEAPON_DEFS = {
-  pistol:  { id:'pistol',  name:'PISTOL',  maxAmmo:30, damage:18, fireRate:0.22, bulletSpeed:440, bulletCount:1, spread:0.04, bulletLife:1.3, bulletR:4, color:'#ffff44', reloadTime:1600 },
-  shotgun: { id:'shotgun', name:'SHOTGUN', maxAmmo:16, damage:22, fireRate:0.85, bulletSpeed:380, bulletCount:6, spread:0.38, bulletLife:0.55, bulletR:3.5, color:'#ff8833', reloadTime:2200 },
-  sniper:  { id:'sniper',  name:'SNIPER',  maxAmmo:10, damage:95, fireRate:1.2,  bulletSpeed:900, bulletCount:1, spread:0.005,bulletLife:2.2, bulletR:3,   color:'#00ffff', reloadTime:2800 },
-  burst:   { id:'burst',   name:'2-BURST', maxAmmo:24, damage:24, fireRate:0.55, bulletSpeed:480, bulletCount:1, burstCount:2, burstDelay:0.09, spread:0.06, bulletLife:1.2, bulletR:4, color:'#88ffff', reloadTime:1800 },
-  trishot: { id:'trishot', name:'3-SHOT',  maxAmmo:24, damage:14, fireRate:0.35, bulletSpeed:420, bulletCount:3, spread:0.22, bulletLife:1.1, bulletR:4, color:'#ffaa00', reloadTime:1900 },
+  pistol:   { id:'pistol',   name:'PISTOL',    maxAmmo:30, damage:18,  fireRate:0.22, bulletSpeed:440,  bulletCount:1, spread:0.04,  bulletLife:1.3,  bulletR:4,   color:'#ffff44', reloadTime:1600 },
+  shotgun:  { id:'shotgun',  name:'SHOTGUN',   maxAmmo:16, damage:22,  fireRate:0.85, bulletSpeed:380,  bulletCount:6, spread:0.38,  bulletLife:0.55, bulletR:3.5, color:'#ff8833', reloadTime:2200 },
+  sniper:   { id:'sniper',   name:'SNIPER',    maxAmmo:10, damage:95,  fireRate:1.2,  bulletSpeed:900,  bulletCount:1, spread:0.005, bulletLife:2.2,  bulletR:3,   color:'#00ffff', reloadTime:2800 },
+  burst:    { id:'burst',    name:'2-BURST',   maxAmmo:24, damage:24,  fireRate:0.55, bulletSpeed:480,  bulletCount:1, burstCount:2, burstDelay:0.09, spread:0.06, bulletLife:1.2, bulletR:4, color:'#88ffff', reloadTime:1800 },
+  trishot:  { id:'trishot',  name:'3-SHOT',    maxAmmo:24, damage:14,  fireRate:0.35, bulletSpeed:420,  bulletCount:3, spread:0.22,  bulletLife:1.1,  bulletR:4,   color:'#ffaa00', reloadTime:1900 },
+  lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:95,  fireRate:0.1,  bulletSpeed:1400, bulletCount:1, spread:0,     bulletLife:0.55, bulletR:5,   color:'#ff2222', reloadTime:3500, chargeTime:1.2, isLaser:true },
 };
 
-export const SPAWNABLE_WEAPONS = ['shotgun','sniper','burst','trishot'];
+export const SPAWNABLE_WEAPONS = ['shotgun','sniper','burst','trishot','lasergun'];
 
 export let bullets = [];
 
@@ -32,6 +33,7 @@ export function fireBullets(shooter, def) {
       color: color||def.color, ownerId,
       weaponId: weaponId || def.id,
       local: true,
+      isLaser: def.isLaser || false,
     });
   }
   bullets.push(...newBullets);
@@ -72,15 +74,98 @@ export function updateBullets(dt) {
 export function drawBullets(ctx) {
   for (const b of bullets) {
     ctx.save();
-    ctx.globalAlpha = Math.min(1, b.life / b.maxLife * 2);
-    ctx.beginPath();
-    ctx.moveTo(b.x, b.y);
-    ctx.lineTo(b.x - b.vx*0.033, b.y - b.vy*0.033);
-    ctx.strokeStyle = b.color+'55'; ctx.lineWidth = b.r*1.4; ctx.stroke();
-    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
-    ctx.fillStyle = b.color; ctx.shadowBlur=10; ctx.shadowColor=b.color; ctx.fill();
+    const alpha = Math.min(1, b.life / b.maxLife * 2);
+    ctx.globalAlpha = alpha;
+
+    if (b.isLaser) {
+      // Laser beam: long bright streak with glow layers
+      const speed = Math.hypot(b.vx, b.vy);
+      const trailLen = 90 + speed * 0.05;
+      const dx = b.vx / speed, dy = b.vy / speed;
+
+      // Outer glow
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - dx * trailLen, b.y - dy * trailLen);
+      ctx.strokeStyle = 'rgba(255,40,40,0.18)';
+      ctx.lineWidth = 18;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // Mid glow
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - dx * trailLen * 0.75, b.y - dy * trailLen * 0.75);
+      ctx.strokeStyle = 'rgba(255,80,80,0.45)';
+      ctx.lineWidth = 7;
+      ctx.stroke();
+
+      // Core beam
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - dx * trailLen * 0.5, b.y - dy * trailLen * 0.5);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 22; ctx.shadowColor = '#ff2222';
+      ctx.stroke();
+
+      // Leading tip
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 30; ctx.shadowColor = '#ff2222';
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - b.vx*0.033, b.y - b.vy*0.033);
+      ctx.strokeStyle = b.color+'55'; ctx.lineWidth = b.r*1.4; ctx.stroke();
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.fillStyle = b.color; ctx.shadowBlur=10; ctx.shadowColor=b.color; ctx.fill();
+    }
+
     ctx.restore();
   }
+}
+
+// Laser charge state — managed by fireBullets / main.js
+export const laserCharge = { charging: false, progress: 0 };
+
+export function drawLaserChargeBeam(ctx, shooter) {
+  if (!laserCharge.charging || laserCharge.progress <= 0) return;
+  const p = laserCharge.progress; // 0..1
+  const { x, y, angle } = shooter;
+  const len = 40 + p * 400;
+
+  ctx.save();
+  ctx.globalAlpha = p * 0.85;
+
+  // Wobble / shimmer flicker
+  const wobble = (Math.random() - 0.5) * (1 - p) * 8;
+  const a = angle + wobble * 0.04;
+  const ex2 = x + Math.cos(a) * len, ey2 = y + Math.sin(a) * len;
+
+  // Outer pulse glow
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex2, ey2);
+  ctx.strokeStyle = `rgba(255,0,0,${0.12 + p * 0.18})`;
+  ctx.lineWidth = 24 * p;
+  ctx.lineCap = 'round'; ctx.stroke();
+
+  // Inner glow
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex2, ey2);
+  ctx.strokeStyle = `rgba(255,80,80,${0.4 * p})`;
+  ctx.lineWidth = 8 * p; ctx.stroke();
+
+  // Core
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex2, ey2);
+  ctx.strokeStyle = `rgba(255,255,255,${0.6 * p})`;
+  ctx.lineWidth = 2; ctx.shadowBlur = 20 * p; ctx.shadowColor = '#ff2222'; ctx.stroke();
+
+  // Charge ring at barrel
+  ctx.beginPath(); ctx.arc(x + Math.cos(angle)*18, y + Math.sin(angle)*18, 4 + p * 10, 0, Math.PI*2);
+  ctx.strokeStyle = `rgba(255,60,60,${p * 0.9})`;
+  ctx.lineWidth = 2; ctx.shadowBlur = 18; ctx.stroke();
+
+  ctx.restore();
 }
 export function drawAmmoPickups(ctx, t, ammoPickups) {
   for (const pk of ammoPickups) {

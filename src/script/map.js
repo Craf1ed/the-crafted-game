@@ -164,15 +164,119 @@ export function randomOpenPos(avoidPoints=[], minDist=120) {
   return {x:tx*TILE+TILE/2, y:ty*TILE+TILE/2};
 }
 
+// --- Laser tag floor texture (generated once, reused as pattern) ---
+let _floorCanvas = null;
+
+function _buildFloorTexture() {
+  const SIZE = 800;
+  const fc = document.createElement('canvas');
+  fc.width = SIZE; fc.height = SIZE;
+  const fx = fc.getContext('2d');
+
+  fx.fillStyle = '#06040e';
+  fx.fillRect(0, 0, SIZE, SIZE);
+
+  // Subtle grid lines
+  fx.strokeStyle = 'rgba(80,0,160,0.18)';
+  fx.lineWidth = 1;
+  for (let i = 0; i < SIZE; i += 40) {
+    fx.beginPath(); fx.moveTo(i, 0); fx.lineTo(i, SIZE); fx.stroke();
+    fx.beginPath(); fx.moveTo(0, i); fx.lineTo(SIZE, i); fx.stroke();
+  }
+
+  // Seeded deterministic RNG
+  let _s = 0xdeadbeef;
+  const rng = () => { _s ^= _s<<13; _s ^= _s>>>17; _s ^= _s<<5; return ((_s>>>0)/4294967296); };
+
+  const neonColors = [
+    'rgba(255,0,80,',
+    'rgba(0,255,200,',
+    'rgba(180,0,255,',
+    'rgba(255,140,0,',
+    'rgba(0,180,255,',
+    'rgba(255,255,0,',
+  ];
+
+  // Draw laser tag shapes
+  for (let i = 0; i < 55; i++) {
+    const x = rng() * SIZE;
+    const y = rng() * SIZE;
+    const col = neonColors[Math.floor(rng() * neonColors.length)];
+    const type = Math.floor(rng() * 5);
+    const alpha = 0.06 + rng() * 0.10;
+    const sz = 18 + rng() * 52;
+
+    fx.save();
+    fx.translate(x, y);
+    fx.rotate(rng() * Math.PI * 2);
+    fx.strokeStyle = col + alpha + ')';
+    fx.lineWidth = 1 + rng() * 2;
+    fx.shadowBlur = 6;
+    fx.shadowColor = col + '0.5)';
+
+    fx.beginPath();
+    if (type === 0) {
+      // L-shape
+      fx.moveTo(0, -sz); fx.lineTo(0, 0); fx.lineTo(sz * 0.6, 0);
+    } else if (type === 1) {
+      // Rectangle outline
+      const w = sz * (0.5 + rng() * 0.8), h = sz * (0.5 + rng() * 0.8);
+      fx.rect(-w/2, -h/2, w, h);
+    } else if (type === 2) {
+      // Curly S-curve
+      fx.moveTo(-sz/2, sz/3);
+      fx.bezierCurveTo(-sz/2, -sz/3, sz/2, -sz/3, sz/2, sz/3);
+    } else if (type === 3) {
+      // T-shape
+      fx.moveTo(-sz/2, 0); fx.lineTo(sz/2, 0);
+      fx.moveTo(0, 0);     fx.lineTo(0, sz * 0.7);
+    } else {
+      // Z-zigzag
+      fx.moveTo(-sz/2, -sz/3); fx.lineTo(sz/2, -sz/3);
+      fx.lineTo(-sz/2,  sz/3); fx.lineTo(sz/2,  sz/3);
+    }
+    fx.stroke();
+    fx.restore();
+  }
+
+  // Glowing scattered dots
+  for (let i = 0; i < 120; i++) {
+    const x = rng() * SIZE, y = rng() * SIZE;
+    const col = neonColors[Math.floor(rng() * neonColors.length)];
+    const r = 0.8 + rng() * 2.5;
+    fx.save();
+    fx.beginPath(); fx.arc(x, y, r, 0, Math.PI*2);
+    fx.fillStyle = col + (0.08 + rng() * 0.18) + ')';
+    fx.shadowBlur = 8; fx.shadowColor = col + '0.6)';
+    fx.fill();
+    fx.restore();
+  }
+
+  _floorCanvas = fc;
+}
+
 export function drawMap(ctx, camX, camY, canvasW, canvasH) {
+  if (!_floorCanvas) _buildFloorTexture();
+
   const sx=Math.max(0,Math.floor(camX/TILE));
   const ex=Math.min(MAP_W,Math.ceil((camX+canvasW)/TILE)+1);
   const sy=Math.max(0,Math.floor(camY/TILE));
   const ey=Math.min(MAP_H,Math.ceil((camY+canvasH)/TILE)+1);
+
+  const pat = ctx.createPattern(_floorCanvas, 'repeat');
+
+  // Floor tiles first
+  ctx.fillStyle = pat;
+  for (let ty=sy;ty<ey;ty++)
+    for (let tx=sx;tx<ex;tx++)
+      if (MAP[ty][tx]!==1)
+        ctx.fillRect(tx*TILE, ty*TILE, TILE, TILE);
+
+  // Walls on top
   for (let ty=sy;ty<ey;ty++)
     for (let tx=sx;tx<ex;tx++){
-      const wx=tx*TILE, wy=ty*TILE;
       if (MAP[ty][tx]===1){
+        const wx=tx*TILE, wy=ty*TILE;
         ctx.fillStyle='#040c04'; ctx.fillRect(wx,wy,TILE,TILE);
         ctx.fillStyle='rgba(0,255,255,0.13)';
         ctx.fillRect(wx,wy,TILE,1); ctx.fillRect(wx,wy,1,TILE);
@@ -181,9 +285,6 @@ export function drawMap(ctx, camX, camY, canvasW, canvasH) {
         ctx.fillStyle='rgba(0,0,0,0.65)';
         ctx.fillRect(wx+TILE-1,wy+1,1,TILE-1);
         ctx.fillRect(wx+1,wy+TILE-1,TILE-2,1);
-      } else {
-        ctx.fillStyle=(tx+ty)%2===0?'#030803':'#020602';
-        ctx.fillRect(wx,wy,TILE,TILE);
       }
     }
 }

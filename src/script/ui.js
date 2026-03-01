@@ -230,6 +230,53 @@ export function updateDashHUD(cooldownRemaining, maxCooldown) {
   }
 }
 
+export function updateLaserChargeHUD(charging, progress) {
+  let el = document.getElementById('laser-charge-hud');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'laser-charge-hud';
+    el.style.cssText = `
+      position:fixed; bottom:108px; left:20px; z-index:10;
+      pointer-events:none; display:flex; align-items:center; gap:8px;
+      font-family:'Orbitron',monospace; font-size:.52rem; letter-spacing:.15em;
+      transition:opacity .2s;
+    `;
+    el.innerHTML = `
+      <span style="color:rgba(255,60,60,.85)"><i class="fa-solid fa-crosshairs"></i> LASER</span>
+      <div style="width:80px;height:5px;background:rgba(255,0,0,.1);border:1px solid rgba(255,60,60,.25)">
+        <div id="laser-charge-fill" style="height:100%;width:0%;background:#ff2222;transition:width .04s;box-shadow:0 0 8px #ff2222"></div>
+      </div>
+      <span id="laser-charge-label" style="color:rgba(255,60,60,.7);font-size:.5rem">HOLD</span>
+    `;
+    document.getElementById('hud')?.appendChild(el);
+  }
+
+  const fill  = document.getElementById('laser-charge-fill');
+  const label = document.getElementById('laser-charge-label');
+  if (!fill || !label) return;
+
+  el.style.opacity = charging ? '1' : '0.35';
+  fill.style.width = (Math.max(0, progress) * 100) + '%';
+
+  if (!charging) {
+    fill.style.background = 'rgba(255,34,34,.35)';
+    fill.style.boxShadow = 'none';
+    label.textContent = 'HOLD';
+    label.style.color = 'rgba(255,60,60,.4)';
+  } else if (progress >= 1) {
+    fill.style.background = '#fff';
+    fill.style.boxShadow = '0 0 14px #ff2222, 0 0 28px #ff2222';
+    label.textContent = 'FIRE!';
+    label.style.color = '#fff';
+  } else {
+    const pct = Math.floor(progress * 100);
+    fill.style.background = `hsl(${0 + progress * 10},100%,${50 + progress * 20}%)`;
+    fill.style.boxShadow = `0 0 ${6 + progress * 12}px #ff2222`;
+    label.textContent = pct + '%';
+    label.style.color = `rgba(255,${60 + progress * 180},${60 * (1-progress)},.9)`;
+  }
+}
+
 function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
