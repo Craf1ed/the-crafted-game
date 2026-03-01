@@ -83,6 +83,7 @@ export function tickBots(dt) {
   for (const bot of _bots) {
     if (!bot.alive) continue;
     _tickTimers(bot, dt);
+    if (bot.stunTimer > 0) continue; // stunned — skip AI/movement/shooting
     _decideState(bot);
     const { ax, ay } = _computeAccel(bot);
     _applyPhysics(bot, ax, ay, dt);
@@ -144,6 +145,7 @@ function _tickTimers(bot, dt) {
   bot.teleportCooldownAI -= dt;
   if (bot.shootCooldown > 0) bot.shootCooldown -= dt;
   if (bot.hitFlash      > 0) bot.hitFlash      -= dt;
+  if (bot.stunTimer     > 0) bot.stunTimer     -= dt;
   if (bot.reloading) {
     const def = WEAPON_DEFS[bot.weaponId];
     if (performance.now() - bot.reloadStart >= def.reloadTime * _diff.reactionMult) {

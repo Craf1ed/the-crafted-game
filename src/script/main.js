@@ -1,9 +1,14 @@
 import { buildMap, loadMap, drawMap, drawMinimap, drawTeleporters, TELEPORTERS,
          getSeededPositions, randomOpenPos, WORLD_W, WORLD_H } from './map.js';
 import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
-         fireBullets, addRemoteBullet, updateBullets,
+         fireBullets, fireLaserBeam, addRemoteBullet, updateBullets,
          drawBullets, drawAmmoPickups, drawWeaponPickups, drawDroppedWeapons,
-         drawHealthPickups, drawLaserChargeBeam, laserCharge } from './weapons.js';
+         drawHealthPickups, drawLaserAimBeam, drawActiveLaser } from './weapons.js';
+import {
+  empPickups, getEmpCount, addEmp, placeEmp, updateEmps, setEmpCallbacks,
+  drawEmpPickups, drawPlacedEmps, checkEmpHit,
+  EMP_DAMAGE, EMP_STUN_SECS, EMP_RADIUS
+} from './emp.js';
 import { createLocalPlayer, updateLocalPlayer, tryReload, tryDash,
          equipWeapon, refillAmmo,
          drawLocalPlayer, drawRemotePlayer, drawDeadPlayer,
@@ -12,7 +17,7 @@ import { createLocalPlayer, updateLocalPlayer, tryReload, tryDash,
 import { initNetwork, joinRoom, checkNameTaken, setCallbacks,
          pushPlayerState, broadcastBullets, broadcastPickupTaken, broadcastPickupRespawn,
          broadcastWeaponDrop, removeWeaponDrop,
-         broadcastKill, broadcastDamage,
+         broadcastKill, broadcastDamage, broadcastFlashbang,
          broadcastRoomMode, broadcastMatchEnd } from './network.js';
 import { hideLobby, showHUD, setLobbyStatus,
          renderColorPicker, renderLobbyPlayers,
@@ -20,12 +25,14 @@ import { hideLobby, showHUD, setLobbyStatus,
          renderLeaderboard, addKillFeed, tickKillFeed,
          showEliminatedOverlay, hideRespawnOverlay,
          drawCrosshair, triggerHitFlash,
-         showKillStreakAnnouncement, updateDashHUD, updateLaserChargeHUD } from './ui.js';
+         showKillStreakAnnouncement, updateDashHUD, updateEmpHUD } from './ui.js';
 import { initBots, tickBots, checkBotCollisions, drawBots, getBots, setDifficulty, setImmune } from './bots.js';
 import {
   initAudio, playShoot, playReload, playHit, playPickup,
   playTeleport, playDeath, playRespawn, playDash,
-  playKillStreak, playMatchStart, playMatchEnd,
+  playKillStreak, playMatchStart, playMatchEnd, startBGM, setBGMVolume,
+  startLaserHum, stopLaserHum, playLaserCharge, playLaserOverheat,
+  playEmpPlace, playEmpDetonate, playFlash,
 } from './audio.js';
 import { DASH_SPEED, DASH_DURATION, DASH_IFRAME } from './player.js';
 
@@ -48,6 +55,12 @@ window.addEventListener('keydown', e => {
   if (e.key===' ' && localPlayer && gamePhase==='playing') {
     if (tryDash(localPlayer, keys)) playDash();
   }
+  if (e.key.toLowerCase()==='e' && localPlayer && gamePhase==='playing' && localPlayer.alive) {
+    if (placeEmp(localPlayer.x, localPlayer.y, myId)) {
+      updateEmpHUD(getEmpCount());
+      playEmpPlace();
+    }
+  }
   if (!['f5','f11','f12'].includes(e.key.toLowerCase())) e.preventDefault();
 });
 window.addEventListener('keyup',     e=>{ keys[e.key.toLowerCase()]=false; });
@@ -67,9 +80,11 @@ let ammoPickups   = {};
 let weaponPickups = {};
 let healthPickups = {};
 let weaponDrops   = {};
+let empPickupMap  = {}; // local EMP pickup state (mirrors empPickups)
 
 let processedDamage = new Set();
 let processedKills  = new Set();
+let processedFlash  = new Set();
 
 const RESPAWN_SECS = 5;
 let respawnTimer   = 0;
@@ -182,6 +197,14 @@ async function handleSolo() {
   weaponPos.forEach((p,i)=> { weaponPickups[`wp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
   healthPos.forEach((p,i)=> { healthPickups[`hp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
 
+  // Spawn 5 EMP pickups
+  const empPos = getSeededPositions(seed + 77777, 5, 140);
+  empPickupMap = {};
+  empPos.forEach((p,i) => {
+    empPickupMap[`emp_${i}`] = { ...p, pulse: Math.random()*Math.PI*2 };
+    console.log(`[SPAWN] EMP at (${Math.round(p.x)}, ${Math.round(p.y)})`);
+  });
+
   localPlayer = createLocalPlayer(myId, name, myColor);
   gameMode  = 'solo';
   gamePhase = 'playing';
@@ -230,7 +253,8 @@ async function handleJoin(solo) {
   const weaponPos = getSeededPositions(seed + 99999,   5, 120).map((p,i)=>({
     ...p, weaponId: SPAWNABLE_WEAPONS[i % SPAWNABLE_WEAPONS.length]
   }));
-  const healthPos = getSeededPositions(seed + 55555,  10, 110);
+  const healthPos    = getSeededPositions(seed + 55555,  10, 110);
+  const flashbangPos = getSeededPositions(seed + 77777,   5, 140);
 
   let name = typed || pickRandomName();
 
@@ -268,10 +292,12 @@ async function handleJoin(solo) {
         ammoPickups   = {};
         weaponPickups = {};
         healthPickups = {};
+        empPickupMap  = {};
         for (const [id, pk] of Object.entries(data)) {
-          if (pk.type==='ammo')   ammoPickups[id]   = pk;
-          if (pk.type==='weapon') weaponPickups[id] = pk;
-          if (pk.type==='health') healthPickups[id] = pk;
+          if (pk.type==='ammo')      ammoPickups[id]   = pk;
+          if (pk.type==='weapon')    weaponPickups[id] = pk;
+          if (pk.type==='health')    healthPickups[id] = pk;
+          if (pk.type==='flashbang') empPickupMap[id]  = pk;
         }
       },
 
@@ -288,6 +314,7 @@ async function handleJoin(solo) {
 
       onKillRegistered:  handleRemoteKill,
       onDamageReceived:  handleRemoteDamage,
+      onFlashbangReceived: handleRemoteFlashbang,
       onRoomModeChanged: (meta) => {
         console.log('[MAIN] onRoomModeChanged fired, gamePhase:', gamePhase, 'meta:', meta);
         if (!meta.startedAt) return;
@@ -347,7 +374,7 @@ async function handleJoin(solo) {
       angle: 0, hp: 100, maxHp: 100, alive: true,
       kills: 0, weaponId: 'pistol', ammo: WEAPON_DEFS.pistol.maxAmmo,
       joinedAt: Date.now(),
-    }, { ammo: ammoPos, weapons: weaponPos, health: healthPos });
+    }, { ammo: ammoPos, weapons: weaponPos, health: healthPos, flashbang: flashbangPos });
 
     isHost = hostResult;
 
@@ -440,6 +467,8 @@ function showHowToPlay(mode, limit) {
     overlay.style.display = 'none';
     isImmune = false;
     setImmune(false);
+    startBGM('music.mp3');
+    setBGMVolume(0.3);
   };
 }
 
@@ -618,6 +647,17 @@ function handleRemoteKill(kill) {
     remotePlayers[kill.victimId].alive = false;
 }
 
+function handleRemoteFlashbang(ev) {
+  if (processedFlash.has(ev.id)) return;
+  processedFlash.add(ev.id);
+  if (ev.victimId !== myId || !localPlayer?.alive) return;
+  // Apply stun + screen flash (same as local detonation)
+  localPlayer.stunTimer = EMP_STUN_SECS;
+  localPlayer.hitFlash  = 0.4;
+  triggerFlashbangScreen();
+  playFlash();
+}
+
 
 function checkTeleporters() {
   if (!localPlayer.alive||localPlayer.teleportCooldown>0) return;
@@ -700,6 +740,30 @@ function checkPickups() {
       removeWeaponDrop(did);
     }
   }
+
+  // Flashbang pickups
+  for (const [id, pk] of Object.entries(empPickupMap)) {
+    if (Math.hypot(localPlayer.x-pk.x, localPlayer.y-pk.y) < r+16) {
+      if (addEmp()) {
+        delete empPickupMap[id];
+        playPickup('ammo');
+        updateEmpHUD(getEmpCount());
+        if (gameMode === 'solo') {
+          // Solo: just respawn locally
+          setTimeout(() => {
+            empPickupMap[id] = { ...pk, pulse: Math.random()*Math.PI*2 };
+          }, 20000);
+        } else {
+          // Multiplayer: remove from Firebase so other clients see it gone,
+          // then respawn it via Firebase after 20s
+          broadcastPickupTaken(id);
+          setTimeout(() => {
+            broadcastPickupRespawn(id, { ...pk, type: 'flashbang', pulse: Math.random()*Math.PI*2 });
+          }, 20000);
+        }
+      }
+    }
+  }
 }
 
 function checkOutgoingBulletHits() {
@@ -717,14 +781,10 @@ function checkOutgoingBulletHits() {
 }
 
 
-// Laser charge state
-let laserChargeTimer = 0;
-let laserCharging = false;
-
 function handleShoot() {
   const def=WEAPON_DEFS[localPlayer.weaponId];
   if (localPlayer.ammo<=0) return;
-  if (def.isLaser) return; // handled by updateLaserCharge()
+  if (def.isLaser) return; // handled by updateLaser()
   if (def.burstCount) { fireBurstSequence(def); }
   else {
     const newBullets=fireBullets(localPlayer,def);
@@ -735,34 +795,137 @@ function handleShoot() {
   }
 }
 
-function updateLaserCharge(dt) {
+// ── Laser gun state ──────────────────────────────────────────────────────────
+let _laserChargeTimer = 0;
+let _laserCharging    = false;
+let _laserFiring      = false;
+let _laserBeam        = null;
+let _laserFireTimer   = 0;      // how long beam has been firing this trigger
+let _laserCooldown    = 0;      // cooldown timer after overheat
+const LASER_MAX_FIRE  = 5.0;    // seconds before forced shutdown
+const LASER_COOLDOWN  = 4.0;    // cooldown duration
+
+function _pointNearSegment(px, py, ax, ay, bx, by, r) {
+  const dx=bx-ax, dy=by-ay, lenSq=dx*dx+dy*dy;
+  if (!lenSq) return Math.hypot(px-ax,py-ay)<r;
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/lenSq));
+  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy))<r;
+}
+
+function updateLaser(dt) {
   const def = WEAPON_DEFS[localPlayer.weaponId];
-  if (!def || !def.isLaser) {
-    if (laserCharging) { laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; }
+  _laserBeam = null;
+
+  if (!def?.isLaser) {
+    if (_laserFiring) { stopLaserHum(); }
+    _laserCharging=false; _laserChargeTimer=0; _laserFiring=false; _laserFireTimer=0; _laserCooldown=0;
     return;
   }
-  if (!localPlayer.alive || localPlayer.reloading || localPlayer.ammo<=0 || localPlayer.shootCooldown>0) {
-    laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; return;
+
+  // Tick cooldown
+  if (_laserCooldown > 0) {
+    _laserCooldown -= dt;
+    if (_laserFiring) { stopLaserHum(); _laserFiring=false; }
+    _laserCharging=false; _laserChargeTimer=0;
+    return;
   }
+
+  if (!localPlayer.alive || localPlayer.reloading || localPlayer.ammo<=0) {
+    if (_laserFiring) stopLaserHum();
+    _laserCharging=false; _laserChargeTimer=0; _laserFiring=false; _laserFireTimer=0;
+    return;
+  }
+
   if (mouseDown) {
-    if (!laserCharging) { laserCharging=true; laserChargeTimer=0; }
-    laserChargeTimer = Math.min(laserChargeTimer+dt, def.chargeTime);
-    laserCharge.charging=true;
-    laserCharge.progress = laserChargeTimer / def.chargeTime;
-    if (laserChargeTimer >= def.chargeTime) {
-      laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; laserChargeTimer=0;
-      const newBullets=fireBullets(localPlayer,def);
-      broadcastBullets(newBullets);
-      playShoot('sniper');
-      localPlayer.ammo=Math.max(0,localPlayer.ammo-1);
-      localPlayer.shootCooldown=def.fireRate;
+    if (!_laserCharging) {
+      _laserCharging=true; _laserChargeTimer=0; _laserFiring=false; _laserFireTimer=0;
+      playLaserCharge();
+    }
+    _laserChargeTimer = Math.min(_laserChargeTimer+dt, def.chargeTime);
+
+    if (_laserChargeTimer >= def.chargeTime) {
+      if (!_laserFiring) {
+        _laserFiring = true;
+        startLaserHum();
+      }
+
+      _laserFireTimer += dt;
+
+      // 5-second overheat cutoff
+      if (_laserFireTimer >= LASER_MAX_FIRE) {
+        stopLaserHum();
+        playLaserOverheat();
+        _laserFiring=false; _laserCharging=false; _laserChargeTimer=0; _laserFireTimer=0;
+        _laserCooldown = LASER_COOLDOWN;
+        localPlayer.ammo = Math.max(0, localPlayer.ammo - 1);
+        return;
+      }
+
+      _laserBeam = fireLaserBeam(localPlayer, def);
+      const beamDmg = def.laserDps * dt;
+
+      for (const [rid,rp] of Object.entries(remotePlayers)) {
+        if (!rp.alive) continue;
+        if (_pointNearSegment(rp.x,rp.y, _laserBeam.x,_laserBeam.y, _laserBeam.hitX,_laserBeam.hitY, PLAYER_RADIUS+8))
+          broadcastDamage(rid, beamDmg, myId);
+      }
+      if (gameMode==='solo') {
+        for (const bot of getBots()) {
+          if (!bot.alive) continue;
+          if (_pointNearSegment(bot.x,bot.y, _laserBeam.x,_laserBeam.y, _laserBeam.hitX,_laserBeam.hitY, PLAYER_RADIUS+8)) {
+            bot.hp -= beamDmg; bot.hitFlash=0.1;
+            if (bot.hp<=0) { bot.alive=false; localPlayer.kills=(localPlayer.kills||0)+1; _registerKill(localPlayer,bot.name,bot.color); }
+          }
+        }
+      }
     }
   } else {
-    if (laserCharging) { laserCharging=false; laserCharge.charging=false; laserCharge.progress=0; laserChargeTimer=0; }
+    if (_laserFiring) {
+      stopLaserHum();
+      localPlayer.ammo = Math.max(0, localPlayer.ammo - 1);
+    }
+    _laserCharging=false; _laserChargeTimer=0; _laserFiring=false; _laserFireTimer=0;
   }
 }
 
-let burstActive=false;
+function _updateLaserHUD() {
+  const fill  = document.getElementById('laser-bar-fill');
+  const label = document.getElementById('laser-ready-label');
+  const wrap  = document.getElementById('laser-hud-wrap');
+  if (!fill || !wrap) return;
+
+  if (_laserCooldown > 0) {
+    // Overheat cooldown — show countdown, bar drains
+    const pct = _laserCooldown / LASER_COOLDOWN;
+    wrap.style.opacity = '1';
+    fill.style.width = (pct * 100) + '%';
+    fill.style.background = 'linear-gradient(90deg,#ff6600,#ffaa00)';
+    fill.style.boxShadow = '0 0 10px #ff6600';
+    if (label) { label.textContent = 'COOL ' + _laserCooldown.toFixed(1)+'s'; label.style.color = '#ffaa00'; }
+  } else if (_laserFiring) {
+    // Firing — bar shows remaining fire time
+    const pct = 1 - (_laserFireTimer / LASER_MAX_FIRE);
+    wrap.style.opacity = '1';
+    fill.style.width = (pct * 100) + '%';
+    fill.style.background = 'linear-gradient(90deg,#ff2222,#ffffff)';
+    fill.style.boxShadow = '0 0 16px #ff2222, 0 0 32px #ff2222';
+    if (label) { label.textContent = 'FIRING'; label.style.color = '#fff'; }
+  } else if (_laserCharging && _laserChargeTimer > 0) {
+    const def = WEAPON_DEFS[localPlayer.weaponId];
+    const p = _laserChargeTimer / def.chargeTime;
+    wrap.style.opacity = '1';
+    fill.style.width = (p * 100) + '%';
+    fill.style.background = `linear-gradient(90deg,#ff2222,rgb(255,${Math.floor(40+p*180)},40))`;
+    fill.style.boxShadow = `0 0 ${6+p*16}px #ff2222`;
+    if (label) { label.textContent = Math.floor(p*100)+'%'; label.style.color = `rgb(255,${Math.floor(40+p*180)},40)`; }
+  } else {
+    wrap.style.opacity = '0.38';
+    fill.style.width = '100%';
+    fill.style.background = 'rgba(255,34,34,.3)';
+    fill.style.boxShadow = 'none';
+    if (label) { label.textContent = 'HOLD'; label.style.color = 'rgba(255,80,80,.4)'; }
+  }
+}
 function fireBurstSequence(def) {
   if (burstActive) return;
   burstActive=true; let shot=0;
@@ -778,6 +941,26 @@ function fireBurstSequence(def) {
 }
 
 
+
+// ── Flashbang screen-flash ───────────────────────────────────────────────────
+let _flashbangTimeout = null;
+function triggerFlashbangScreen() {
+  const el = document.getElementById('flashbang-overlay');
+  if (!el) return;
+  el.style.opacity = '1';
+  clearTimeout(_flashbangTimeout);
+  // Fade out over ~3 seconds matching stun duration
+  let start = performance.now();
+  const FADE = EMP_STUN_SECS * 1000;
+  function fadeStep(now) {
+    const elapsed = now - start;
+    const remaining = Math.max(0, 1 - elapsed / FADE);
+    el.style.opacity = remaining;
+    if (remaining > 0) requestAnimationFrame(fadeStep);
+    else el.style.opacity = '0';
+  }
+  requestAnimationFrame(fadeStep);
+}
 
 function startGameLoop(){
   if (gameRunning) return;
@@ -799,13 +982,13 @@ function update(dt, ts){
   tickRemoteRender(dt);
 
   if (gamePhase==='playing' && localPlayer.alive) {
-    updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
-
-    if (mouseDown && localPlayer.shootCooldown<=0
-        && !localPlayer.reloading && localPlayer.ammo>0
-        && !WEAPON_DEFS[localPlayer.weaponId]?.isLaser) handleShoot();
-
-    updateLaserCharge(dt);
+    if (!localPlayer.stunTimer || localPlayer.stunTimer <= 0) {
+      updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
+      if (mouseDown && localPlayer.shootCooldown<=0
+          && !localPlayer.reloading && localPlayer.ammo>0
+          && !WEAPON_DEFS[localPlayer.weaponId]?.isLaser) handleShoot();
+    }
+    updateLaser(dt);
 
     camX=Math.max(0,Math.min(WORLD_W-canvas.width,  localPlayer.x-canvas.width/2));
     camY=Math.max(0,Math.min(WORLD_H-canvas.height, localPlayer.y-canvas.height/2));
@@ -821,9 +1004,10 @@ function update(dt, ts){
     updateAmmoHUD(localPlayer.ammo, def.maxAmmo, localPlayer.reloading);
     updateWeaponHUD(localPlayer.weaponId);
     updateDashHUD(localPlayer.dashCooldown, DASH_COOLDOWN);
-    if (WEAPON_DEFS[localPlayer.weaponId]?.isLaser)
-      updateLaserChargeHUD(laserCharge.charging, laserCharge.progress);
-    else updateLaserChargeHUD(false, 0);
+    // Laser HUD
+    if (WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
+      _updateLaserHUD();
+    }
   } else if (gamePhase==='playing' && !localPlayer.alive) {
     const alive=Object.values(remotePlayers).find(p=>p.alive);
     if (alive){
@@ -834,6 +1018,53 @@ function update(dt, ts){
 
   updateBullets(dt);
   tickKillFeed();
+
+  // ── Flashbang update ─────────────────────────────────────────────────────
+  if (gamePhase === 'playing') {
+    const detonations = updateEmps(dt);
+    for (const det of detonations) {
+      playEmpDetonate();
+
+      // Flash remote players in radius (multiplayer) — thrower is excluded server-side by thrownBy check
+      if (gameMode !== 'solo') {
+        for (const [rid, rp] of Object.entries(remotePlayers)) {
+          if (!rp.alive) continue;
+          if (Math.hypot(rp.x - det.x, rp.y - det.y) <= EMP_RADIUS) {
+            broadcastFlashbang(rid, det.thrownBy);
+          }
+        }
+      }
+
+      // Stun local player only if they didn't throw it
+      const localInRadius = localPlayer?.alive && Math.hypot(localPlayer.x-det.x, localPlayer.y-det.y) <= EMP_RADIUS;
+      const localThrewIt  = det.thrownBy === myId;
+      if (localInRadius && !localThrewIt) {
+        localPlayer.stunTimer = EMP_STUN_SECS;
+        localPlayer.hitFlash  = 0.4;
+        triggerFlashbangScreen();
+        playFlash();
+      }
+      // Stun bots (bots never threw it)
+      if (gameMode === 'solo') {
+        for (const bot of getBots()) {
+          if (!bot.alive) continue;
+          if (Math.hypot(bot.x-det.x, bot.y-det.y) <= EMP_RADIUS) {
+            bot.hitFlash = 0.4;
+            bot.stunTimer = EMP_STUN_SECS;
+          }
+        }
+      }
+    }
+    // Tick stun on local player
+    if (localPlayer?.stunTimer > 0) {
+      localPlayer.stunTimer -= dt;
+      if (localPlayer.stunTimer < 0) localPlayer.stunTimer = 0;
+    }
+    // Stun overlay
+    const stunEl = document.getElementById('stun-overlay');
+    if (stunEl) stunEl.classList.toggle('active', (localPlayer?.stunTimer||0) > 0);
+    updateEmpHUD(getEmpCount());
+  }
 
  
   if (gameMode === 'solo') {
@@ -890,6 +1121,8 @@ function draw(ts){
   drawHealthPickups(ctx,t,Object.values(healthPickups));
   drawWeaponPickups(ctx,t,Object.values(weaponPickups));
   drawDroppedWeapons(ctx,t,weaponDrops);
+  drawEmpPickups(ctx,t,Object.values(empPickupMap));
+  drawPlacedEmps(ctx,t);
   drawBullets(ctx);
 
   for (const [,p] of Object.entries(remotePlayers))
@@ -900,8 +1133,15 @@ function draw(ts){
   if (localPlayer)
     localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t,isImmune) : drawDeadPlayer(ctx,localPlayer,t);
 
-  // Laser charge beam (drawn on top of player, in world space)
-  if (localPlayer?.alive && laserCharge.charging) drawLaserChargeBeam(ctx, localPlayer);
+  // Laser: aim preview while charging, active beam while firing
+  if (localPlayer?.alive && WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
+    if (_laserFiring && _laserBeam) {
+      drawActiveLaser(ctx, _laserBeam, t);
+    } else if (_laserCharging && _laserChargeTimer > 0) {
+      const def = WEAPON_DEFS[localPlayer.weaponId];
+      drawLaserAimBeam(ctx, localPlayer, _laserChargeTimer / def.chargeTime);
+    }
+  }
 
   ctx.restore();
 

@@ -277,10 +277,10 @@ export function drawMap(ctx, camX, camY, canvasW, canvasH) {
     for (let tx=sx;tx<ex;tx++){
       if (MAP[ty][tx]===1){
         const wx=tx*TILE, wy=ty*TILE;
-        ctx.fillStyle='#040c04'; ctx.fillRect(wx,wy,TILE,TILE);
-        ctx.fillStyle='rgba(0,255,255,0.13)';
+        ctx.fillStyle='#08060f'; ctx.fillRect(wx,wy,TILE,TILE);
+        ctx.fillStyle='rgba(120,80,255,0.22)';
         ctx.fillRect(wx,wy,TILE,1); ctx.fillRect(wx,wy,1,TILE);
-        ctx.fillStyle='rgba(0,255,255,0.04)';
+        ctx.fillStyle='rgba(100,60,220,0.07)';
         ctx.fillRect(wx+1,wy+1,TILE-2,TILE-2);
         ctx.fillStyle='rgba(0,0,0,0.65)';
         ctx.fillRect(wx+TILE-1,wy+1,1,TILE-1);

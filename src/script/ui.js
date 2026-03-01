@@ -33,14 +33,18 @@ export function renderLobbyPlayers(players, myId) {
     </div>`).join('');
 }
 
-export function showHUD() { document.getElementById('hud').style.display='flex'; }
+export function showHUD() {
+  const hud = document.getElementById('hud');
+  if (hud) hud.style.display = 'block';
+}
 
 export function updateHealthHUD(hp, maxHp) {
   const pct = Math.max(0, hp/maxHp)*100;
   const fill = document.getElementById('health-fill');
   if (fill) {
     fill.style.width = pct+'%';
-    fill.style.background = pct>60?'#00ff88':pct>30?'#ff0':'#f44';
+    fill.style.background = pct>60 ? 'linear-gradient(90deg,#00c870,#00ff88)' : pct>30 ? 'linear-gradient(90deg,#cc8800,#ffdd00)' : 'linear-gradient(90deg,#cc1111,#ff4444)';
+    fill.style.boxShadow = pct>60 ? '0 0 8px #00ff88' : pct>30 ? '0 0 8px #ffdd00' : '0 0 8px #ff4444';
   }
   const val = document.getElementById('hp-val');
   if (val) val.textContent = Math.ceil(hp);
@@ -49,40 +53,54 @@ export function updateHealthHUD(hp, maxHp) {
 export function updateAmmoHUD(ammo, maxAmmo, reloading) {
   const el = document.getElementById('ammo-display'); if (!el) return;
   el.innerHTML = '';
-  for (let i=0;i<maxAmmo;i++){
-    const pip=document.createElement('div');
-    pip.className='ammo-pip'+(i>=ammo?' empty':'');
-    if (i%5===4) pip.style.marginRight='4px';
-    el.appendChild(pip);
+
+  // For lasergun (maxAmmo=3) use special cells, else pips
+  if (maxAmmo <= 5) {
+    for (let i = 0; i < maxAmmo; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'ammo-cell' + (i >= ammo ? ' empty' : '');
+      el.appendChild(cell);
+    }
+  } else {
+    for (let i = 0; i < maxAmmo; i++) {
+      const pip = document.createElement('div');
+      pip.className = 'ammo-pip' + (i >= ammo ? ' empty' : '');
+      if (i%5===4) pip.style.marginRight = '4px';
+      el.appendChild(pip);
+    }
   }
+
   const ri = document.getElementById('reload-indicator');
-  if (ri) ri.style.display=reloading?'block':'none';
+  if (ri) ri.style.display = reloading ? 'flex' : 'none';
 }
 
 export function updateWeaponHUD(weaponId) {
-  const def=WEAPON_DEFS[weaponId]; if (!def) return;
-  const el=document.getElementById('weapon-name');
-  if (el){ el.textContent=def.name; el.style.color=def.color; }
+  const def = WEAPON_DEFS[weaponId]; if (!def) return;
+  const el = document.getElementById('weapon-name');
+  if (el) {
+    el.textContent = def.name;
+    el.style.color = def.color;
+    el.style.textShadow = `0 0 12px ${def.color}`;
+  }
 }
 
 export function showRespawnOverlay(seconds) {
   const el = document.getElementById('eliminated-overlay'); if (!el) return;
-  el.style.display='flex';
-  const killerEl = el.querySelector('#elim-killer');
+  el.style.display = 'flex';
   const countEl = el.querySelector('#respawn-count');
   if (countEl) countEl.textContent = seconds > 0 ? `RESPAWNING IN ${seconds}s` : 'RESPAWNING...';
 }
 
 export function hideRespawnOverlay() {
   const el = document.getElementById('eliminated-overlay');
-  if (el) el.style.display='none';
+  if (el) el.style.display = 'none';
 }
 
 export function showEliminatedOverlay(killerName, killerColor) {
   const el = document.getElementById('eliminated-overlay'); if (!el) return;
-  el.style.display='flex';
+  el.style.display = 'flex';
   const ke = el.querySelector('#elim-killer');
-  if (ke){ ke.textContent=killerName||'???'; ke.style.color=killerColor||'#f44'; }
+  if (ke) { ke.textContent = killerName||'???'; ke.style.color = killerColor||'#f44'; }
 }
 
 export function renderLeaderboard(players) {
@@ -155,7 +173,6 @@ export function showKillStreakAnnouncement(count, playerColor) {
   const tier = Math.min(5, count);
   const info = STREAK_LABELS[tier];
   if (!info) return;
-
   let el = document.getElementById('killstreak-announce');
   if (!el) {
     el = document.createElement('div');
@@ -164,116 +181,86 @@ export function showKillStreakAnnouncement(count, playerColor) {
       position:fixed; top:22%; left:50%; transform:translateX(-50%);
       font-family:'Orbitron',sans-serif; font-weight:900;
       letter-spacing:.25em; text-align:center; z-index:30;
-      pointer-events:none; text-transform:uppercase;
-      transition:opacity .3s;
+      pointer-events:none; text-transform:uppercase; transition:opacity .3s;
     `;
     document.body.appendChild(el);
   }
-
   const label = count > 5 ? `${count}x KILL` : info.text;
   const color = count > 5 ? '#ff0044' : info.color;
   const glow  = count > 5 ? '#880022' : info.glow;
-
-  el.style.cssText += `
-    color:${color}; text-shadow:0 0 20px ${color}, 0 0 60px ${glow};
-    font-size:${Math.min(2.8, 1.6 + (tier - 2) * 0.4)}rem;
-    opacity:1;
-  `;
-  el.innerHTML = `
-    <div>${label}</div>
-    <div style="font-size:.45em;color:${color}88;letter-spacing:.35em;margin-top:.2em">${count} IN A ROW</div>
-  `;
-
+  el.style.cssText += `color:${color}; text-shadow:0 0 20px ${color}, 0 0 60px ${glow};
+    font-size:${Math.min(2.8, 1.6 + (tier - 2) * 0.4)}rem; opacity:1;`;
+  el.innerHTML = `<div>${label}</div>
+    <div style="font-size:.45em;color:${color}88;letter-spacing:.35em;margin-top:.2em">${count} IN A ROW</div>`;
   clearTimeout(_streakTimeout);
-  _streakTimeout = setTimeout(() => {
-    el.style.opacity = '0';
-  }, 2200);
+  _streakTimeout = setTimeout(() => { el.style.opacity = '0'; }, 2200);
 }
+
+// ─── Unified bottom HUD updaters ────────────────────────────────────────────
 
 export function updateDashHUD(cooldownRemaining, maxCooldown) {
-  let el = document.getElementById('dash-hud');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'dash-hud';
-    el.style.cssText = `
-      position:fixed; bottom:88px; left:20px; z-index:10;
-      pointer-events:none; display:flex; align-items:center; gap:8px;
-      font-family:'Orbitron',monospace; font-size:.52rem; letter-spacing:.15em;
-    `;
-    el.innerHTML = `
-      <span style="color:rgba(0,180,140,.75)"><i class="fa-solid fa-bolt"></i> DASH</span>
-      <div id="dash-bar-bg" style="width:60px;height:4px;background:rgba(0,255,255,.1);border:1px solid rgba(0,255,255,.2)">
-        <div id="dash-bar-fill" style="height:100%;background:#0ff;transition:width .05s;box-shadow:0 0 6px #0ff"></div>
-      </div>
-      <span id="dash-ready-label" style="color:#0ff;font-size:.5rem"></span>
-    `;
-    document.getElementById('hud')?.appendChild(el);
-  }
-
   const fill  = document.getElementById('dash-bar-fill');
   const label = document.getElementById('dash-ready-label');
-  if (!fill || !label) return;
-
+  const icon  = document.getElementById('dash-icon');
+  if (!fill) return;
   const pct = Math.max(0, 1 - cooldownRemaining / maxCooldown);
   fill.style.width = (pct * 100) + '%';
-
   if (cooldownRemaining <= 0) {
-    fill.style.background = '#0ff';
-    fill.style.boxShadow  = '0 0 8px #0ff';
-    label.textContent = 'READY';
-    label.style.color = '#0ff';
+    fill.style.background = 'linear-gradient(90deg,#0088cc,#00ffff)';
+    fill.style.boxShadow  = '0 0 10px #00ffff';
+    if (label) { label.textContent = 'READY'; label.style.color = '#00ffff'; }
+    if (icon)  icon.style.color = '#00ffff';
   } else {
-    fill.style.background = 'rgba(0,255,255,.4)';
+    fill.style.background = 'rgba(0,200,255,.3)';
     fill.style.boxShadow  = 'none';
-    label.textContent = cooldownRemaining.toFixed(1) + 's';
-    label.style.color = 'rgba(0,255,255,.4)';
+    if (label) { label.textContent = cooldownRemaining.toFixed(1)+'s'; label.style.color = 'rgba(0,200,255,.5)'; }
+    if (icon)  icon.style.color = 'rgba(0,200,255,.5)';
   }
 }
 
-export function updateLaserChargeHUD(charging, progress) {
-  let el = document.getElementById('laser-charge-hud');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'laser-charge-hud';
-    el.style.cssText = `
-      position:fixed; bottom:108px; left:20px; z-index:10;
-      pointer-events:none; display:flex; align-items:center; gap:8px;
-      font-family:'Orbitron',monospace; font-size:.52rem; letter-spacing:.15em;
-      transition:opacity .2s;
-    `;
-    el.innerHTML = `
-      <span style="color:rgba(255,60,60,.85)"><i class="fa-solid fa-crosshairs"></i> LASER</span>
-      <div style="width:80px;height:5px;background:rgba(255,0,0,.1);border:1px solid rgba(255,60,60,.25)">
-        <div id="laser-charge-fill" style="height:100%;width:0%;background:#ff2222;transition:width .04s;box-shadow:0 0 8px #ff2222"></div>
-      </div>
-      <span id="laser-charge-label" style="color:rgba(255,60,60,.7);font-size:.5rem">HOLD</span>
-    `;
-    document.getElementById('hud')?.appendChild(el);
-  }
+export function updateLaserHUD(charging, progress, beamActive) {
+  const fill  = document.getElementById('laser-bar-fill');
+  const label = document.getElementById('laser-ready-label');
+  const wrap  = document.getElementById('laser-hud-wrap');
+  if (!fill || !wrap) return;
 
-  const fill  = document.getElementById('laser-charge-fill');
-  const label = document.getElementById('laser-charge-label');
-  if (!fill || !label) return;
-
-  el.style.opacity = charging ? '1' : '0.35';
+  wrap.style.opacity = charging || beamActive ? '1' : '0.38';
   fill.style.width = (Math.max(0, progress) * 100) + '%';
 
-  if (!charging) {
-    fill.style.background = 'rgba(255,34,34,.35)';
-    fill.style.boxShadow = 'none';
-    label.textContent = 'HOLD';
-    label.style.color = 'rgba(255,60,60,.4)';
-  } else if (progress >= 1) {
-    fill.style.background = '#fff';
-    fill.style.boxShadow = '0 0 14px #ff2222, 0 0 28px #ff2222';
-    label.textContent = 'FIRE!';
-    label.style.color = '#fff';
+  if (beamActive) {
+    fill.style.background = 'linear-gradient(90deg,#ff2222,#ffffff)';
+    fill.style.boxShadow  = '0 0 16px #ff2222, 0 0 32px #ff2222';
+    if (label) { label.textContent = 'FIRING'; label.style.color = '#fff'; }
+  } else if (charging && progress > 0) {
+    const r = Math.floor(255), g = Math.floor(40 + progress * 180), b = 40;
+    fill.style.background = `linear-gradient(90deg,#ff2222,rgb(${r},${g},${b}))`;
+    fill.style.boxShadow  = `0 0 ${6 + progress * 16}px #ff2222`;
+    if (label) { label.textContent = Math.floor(progress*100)+'%'; label.style.color = `rgb(${r},${g},${b})`; }
   } else {
-    const pct = Math.floor(progress * 100);
-    fill.style.background = `hsl(${0 + progress * 10},100%,${50 + progress * 20}%)`;
-    fill.style.boxShadow = `0 0 ${6 + progress * 12}px #ff2222`;
-    label.textContent = pct + '%';
-    label.style.color = `rgba(255,${60 + progress * 180},${60 * (1-progress)},.9)`;
+    fill.style.background = 'rgba(255,34,34,.3)';
+    fill.style.boxShadow  = 'none';
+    if (label) { label.textContent = 'HOLD'; label.style.color = 'rgba(255,80,80,.4)'; }
+  }
+}
+
+export function updateEmpHUD(count) {
+  const wrap = document.getElementById('emp-hud-wrap');
+  const pips = document.getElementById('emp-pips');
+  const label = document.getElementById('emp-count-label');
+  if (!wrap || !pips) return;
+
+  wrap.style.opacity = count > 0 ? '1' : '0.4';
+
+  pips.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'emp-pip' + (i < count ? ' full' : '');
+    pips.appendChild(pip);
+  }
+  if (label) {
+    label.textContent = count > 0 ? `×${count}` : '×0';
+    label.style.color = '#ffffff';
+    label.style.textShadow = count > 0 ? '0 0 10px #ffffff' : 'none';
   }
 }
 

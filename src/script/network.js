@@ -14,17 +14,18 @@ let myId = '';
 
 
 const cb = {
-  onPlayerUpdated:     () => {},
-  onPlayerLeft:        () => {},
-  onBulletFired:       () => {},
-  onPickupsInit:       () => {},
-  onPickupTaken:       () => {},
-  onWeaponDropped:     () => {},
-  onWeaponDropRemoved: () => {},
-  onKillRegistered:    () => {},
-  onDamageReceived:    () => {},
-  onRoomModeChanged:   () => {},
-  onMatchEnded:        () => {},
+  onPlayerUpdated:      () => {},
+  onPlayerLeft:         () => {},
+  onBulletFired:        () => {},
+  onPickupsInit:        () => {},
+  onPickupTaken:        () => {},
+  onWeaponDropped:      () => {},
+  onWeaponDropRemoved:  () => {},
+  onKillRegistered:     () => {},
+  onDamageReceived:     () => {},
+  onRoomModeChanged:    () => {},
+  onMatchEnded:         () => {},
+  onFlashbangReceived:  () => {},
 };
 
 export function setCallbacks(cbs) {
@@ -76,6 +77,10 @@ export async function joinRoom(playerData, pickupPositions) {
   for (const [i, pos] of (pickupPositions.health || []).entries()) {
     if (!pickupData[`hp_${i}`])
       pickupData[`hp_${i}`] = { ...pos, type: 'health', pulse: Math.random()*Math.PI*2 };
+  }
+  for (const [i, pos] of (pickupPositions.flashbang || []).entries()) {
+    if (!pickupData[`fb_${i}`])
+      pickupData[`fb_${i}`] = { ...pos, type: 'flashbang', pulse: Math.random()*Math.PI*2 };
   }
   await fbSet(r(`rooms/${roomCode}/pickups`), pickupData);
 
@@ -139,6 +144,11 @@ export async function joinRoom(playerData, pickupPositions) {
   fbOnValue(r(`rooms/${roomCode}/damage/${myId}`), snap => {
     if (!snap.exists()) return;
     for (const [, ev] of Object.entries(snap.val())) cb.onDamageReceived(ev);
+  });
+
+  fbOnValue(r(`rooms/${roomCode}/flash/${myId}`), snap => {
+    if (!snap.exists()) return;
+    for (const [, ev] of Object.entries(snap.val())) cb.onFlashbangReceived(ev);
   });
 
   return iAmHost;
@@ -231,4 +241,17 @@ export async function broadcastMatchEnd(winnerName, winnerColor, reason) {
 
 export function leaveRoom() {
   try { fbRemove(r(`rooms/${roomCode}/players/${myId}`)); } catch(e) {}
+}
+
+// Broadcast a flashbang stun to a specific victim (by their player id)
+export function broadcastFlashbang(victimId, throwerId) {
+  const evId = `flash_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  try {
+    fbSet(r(`rooms/${roomCode}/flash/${victimId}/${evId}`), {
+      id: evId, victimId, throwerId, ts: Date.now(),
+    });
+    setTimeout(() => {
+      try { fbRemove(r(`rooms/${roomCode}/flash/${victimId}/${evId}`)); } catch(e) {}
+    }, 6000);
+  } catch(e) {}
 }

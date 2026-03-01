@@ -9,38 +9,57 @@
 <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
 </head>
 <body>
+
+<!-- ═══════════════════════════════ LOBBY ═══════════════════════════════════ -->
 <div id="lobby">
-  <h1>THE CRAFTED GAME</h1>
-  <div class="subtitle">BATTLE ARCADE</div>
+  <div class="lobby-bg-lines"></div>
+
+  <div class="lobby-header">
+    <div class="lobby-logo-glow"></div>
+    <h1 class="lobby-title">THE CRAFTED GAME</h1>
+    <div class="lobby-subtitle">◈ BATTLE ARCADE ◈</div>
+  </div>
+
   <div class="panel">
+    <div class="panel-corner tl"></div>
+    <div class="panel-corner tr"></div>
+    <div class="panel-corner bl"></div>
+    <div class="panel-corner br"></div>
+
     <label>GAMERTAG</label>
-    <input id="player-name" type="text" placeholder="Enter your name" maxlength="14" autocomplete="off">
+    <input id="player-name" type="text" placeholder="Enter your callsign" maxlength="14" autocomplete="off">
 
     <label>ROOM CODE</label>
-    <input id="room-code" type="text" placeholder="ARCADE or custom code" maxlength="10" autocomplete="off">
+    <input id="room-code" type="text" placeholder="ARCADE or custom" maxlength="10" autocomplete="off">
 
-    <label class="color-label">CHOOSE COLOR</label>
+    <label class="color-label">PLAYER COLOR</label>
     <div id="color-picker"></div>
 
-    <button class="btn" id="join-btn"><i class="fa-solid fa-door-open"></i> JOIN / CREATE ROOM</button>
-    <button class="btn secondary" id="solo-btn"><i class="fa-solid fa-user"></i> SOLO (DUEL BOTS)</button>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="join-btn"><i class="fa-solid fa-door-open"></i> JOIN / CREATE ROOM</button>
+      <button class="btn btn-secondary" id="solo-btn"><i class="fa-solid fa-robot"></i> SOLO VS BOTS</button>
+    </div>
+
     <div id="solo-difficulty-row" style="display:none">
-      <span class="diff-label">DIFFICULTY</span>
+      <span class="diff-label"><i class="fa-solid fa-gauge"></i> DIFFICULTY</span>
       <div id="diff-picker">
         <label class="diff-opt"><input type="radio" name="diff" value="noob"> NOOB</label>
         <label class="diff-opt"><input type="radio" name="diff" value="easy"> EASY</label>
-        <label class="diff-opt"><input type="radio" name="diff" value="medium"> MEDIUM</label>
+        <label class="diff-opt active"><input type="radio" name="diff" value="medium" checked> MEDIUM</label>
         <label class="diff-opt"><input type="radio" name="diff" value="hard"> HARD</label>
         <label class="diff-opt"><input type="radio" name="diff" value="god"> GOD</label>
       </div>
     </div>
-    <button class="btn global" id="global-btn"><i class="fa-solid fa-bolt"></i> JOIN GLOBAL ARCADE</button>
+
+    <button class="btn btn-global" id="global-btn"><i class="fa-solid fa-globe"></i> GLOBAL ARCADE</button>
+
     <div id="status-msg"></div>
+
     <div id="lobby-waiting">
-      <div class="lw-title">PLAYERS IN ROOM</div>
+      <div class="lw-title"><i class="fa-solid fa-users"></i> PLAYERS IN ROOM</div>
       <div id="lobby-players"></div>
       <div id="host-controls">
-        <div class="lw-title" style="margin-top:.9rem">GAME MODE</div>
+        <div class="lw-title" style="margin-top:.9rem"><i class="fa-solid fa-gamepad"></i> GAME MODE</div>
         <div id="mode-picker">
           <label class="mode-opt active">
             <input type="radio" name="gamemode" value="endless" checked>
@@ -50,7 +69,7 @@
           <label class="mode-opt">
             <input type="radio" name="gamemode" value="lms">
             <i class="fa-solid fa-skull-crossbones"></i>
-            <span>LAST MAN STANDING</span>
+            <span>LAST MAN</span>
           </label>
           <label class="mode-opt">
             <input type="radio" name="gamemode" value="killlimit">
@@ -59,52 +78,118 @@
             <input type="number" id="kill-limit-val" value="10" min="1" max="99">
           </label>
         </div>
-        <button class="btn" id="host-start"><i class="fa-solid fa-play"></i> START MATCH</button>
+        <button class="btn btn-primary" id="host-start"><i class="fa-solid fa-play"></i> START MATCH</button>
       </div>
     </div>
   </div>
-  <div class="lobby-info"><i class="fa-solid fa-circle-info"></i> Create a room to set the game mode &nbsp;·&nbsp; Join any existing room to play</div>
+
+  <div class="lobby-footer">
+    <span><i class="fa-solid fa-circle-info"></i> Create a room to pick game mode</span>
+    <span class="sep">·</span>
+    <span>Join any room to play instantly</span>
+  </div>
 </div>
+
+<!-- ═══════════════════════════════ GAME CANVAS ══════════════════════════════ -->
 <canvas id="canvas"></canvas>
-<canvas id="minimap" width="160" height="120"></canvas>
+<canvas id="minimap" width="260" height="195"></canvas>
 <div id="minimap-label">MINIMAP</div>
+
+<!-- ═══════════════════════════════ HUD ══════════════════════════════════════ -->
 <div id="hud">
-  <div class="hud-row">
-    <div class="hud-item">
-      <span class="hud-label"><i class="fa-solid fa-heart"></i></span>
-      <div id="health-bar"><div id="health-fill" style="width:100%"></div></div>
-      <span class="hud-val" id="hp-val">100</span>
+  <!-- Left column: HP + Weapon + Ammo -->
+  <div id="hud-left">
+
+    <!-- Health -->
+    <div class="hud-block" id="hud-health-block">
+      <div class="hud-block-label"><i class="fa-solid fa-heart"></i> HEALTH</div>
+      <div class="hud-health-row">
+        <div id="health-bar"><div id="health-fill"></div></div>
+        <span id="hp-val">100</span>
+      </div>
     </div>
-    <div class="hud-item">
-      <span class="hud-label"><i class="fa-solid fa-gun"></i></span>
-      <span id="weapon-name" style="color:#ffff44">PISTOL</span>
+
+    <!-- Weapon + Ammo -->
+    <div class="hud-block" id="hud-weapon-block">
+      <div class="hud-block-label"><i class="fa-solid fa-gun"></i> WEAPON</div>
+      <div class="hud-weapon-row">
+        <span id="weapon-name">PISTOL</span>
+        <div id="ammo-display"></div>
+      </div>
     </div>
-  </div>
-  <div class="hud-row">
-    <div class="hud-item">
-      <span class="hud-label"><i class="fa-solid fa-circle-dot"></i></span>
-      <div id="ammo-display"></div>
+
+    <!-- Flashbang inventory -->
+    <div class="hud-block" id="emp-hud-wrap" style="opacity:0.4">
+      <div class="hud-block-label" style="color:rgba(255,255,255,.7)"><i class="fa-solid fa-bolt"></i> FLASHBANG &nbsp;<kbd style="font-family:'Share Tech Mono',monospace;font-size:.55rem;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);padding:1px 5px;color:rgba(255,255,255,.8);border-radius:2px;">E</kbd></div>
+      <div class="hud-weapon-row" style="align-items:center;gap:10px;">
+        <div id="emp-pips" style="display:flex;gap:6px;">
+          <div class="emp-pip"></div>
+          <div class="emp-pip"></div>
+          <div class="emp-pip"></div>
+        </div>
+        <span id="emp-count-label" style="font-family:'Orbitron',sans-serif;font-size:.85rem;font-weight:700;color:#ffffff;letter-spacing:.1em;text-shadow:0 0 10px #ffffff;">×0</span>
+      </div>
     </div>
+
+    <!-- Abilities row: Dash + Laser -->
+    <div class="hud-abilities">
+
+      <!-- Dash -->
+      <div class="hud-ability-block">
+        <div class="hud-ability-label" id="dash-icon"><i class="fa-solid fa-bolt"></i> DASH <kbd>SPACE</kbd></div>
+        <div class="hud-bar-track">
+          <div class="hud-bar-fill" id="dash-bar-fill"></div>
+        </div>
+        <span class="hud-ability-val" id="dash-ready-label">READY</span>
+      </div>
+
+      <!-- Laser charge (hidden when not using lasergun) -->
+      <div class="hud-ability-block" id="laser-hud-wrap" style="opacity:0.38">
+        <div class="hud-ability-label" style="color:#ff5555"><i class="fa-solid fa-crosshairs"></i> LASER <kbd>HOLD</kbd></div>
+        <div class="hud-bar-track laser">
+          <div class="hud-bar-fill laser" id="laser-bar-fill"></div>
+        </div>
+        <span class="hud-ability-val" id="laser-ready-label">HOLD</span>
+      </div>
+
+    </div>
+
+    <!-- Controls hint -->
+    <div id="controls-hint">
+      <div class="ctrl-row"><kbd>WASD</kbd><span>Move</span></div>
+      <div class="ctrl-row"><kbd>MOUSE</kbd><span>Aim &amp; Shoot</span></div>
+      <div class="ctrl-row"><kbd>SPACE</kbd><span>Dash</span></div>
+      <div class="ctrl-row"><kbd>R</kbd><span>Reload</span></div>
+      <div class="ctrl-row"><kbd>E</kbd><span>Throw Flashbang</span></div>
+    </div>
+
   </div>
 </div>
+
+<div id="stun-overlay"></div>
+<div id="flashbang-overlay"></div>
+
 <div id="reload-indicator"><i class="fa-solid fa-rotate"></i> RELOADING</div>
 <div id="leaderboard"></div>
 <div id="kill-feed"></div>
-<div id="controls-hint">
-  <i class="fa-solid fa-arrow-up-right-and-arrow-down-left-from-center"></i> WASD — MOVE &nbsp;·&nbsp; <i class="fa-regular fa-circle-dot"></i> MOUSE — AIM<br>
-  <i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE — SHOOT &nbsp;·&nbsp; <i class="fa-solid fa-r"></i> — RELOAD
-</div>
 <div id="alert-flash"></div>
 
+<!-- ═══════════════════ ELIMINATED OVERLAY ══════════════════════════════════ -->
 <div id="eliminated-overlay">
-  <h2><i class="fa-solid fa-skull"></i> ELIMINATED</h2>
-  <p>KILLED BY <span id="elim-killer">???</span></p>
+  <div class="elim-inner">
+    <div class="elim-skull"><i class="fa-solid fa-skull"></i></div>
+    <h2>ELIMINATED</h2>
+    <p>KILLED BY <span id="elim-killer">???</span></p>
+    <div id="respawn-count"></div>
+  </div>
 </div>
 
 <div id="spectator-label">
   <i class="fa-solid fa-eye"></i> SPECTATING<br>
   <span style="font-size:.6rem;color:rgba(0,255,255,.2)">YOU HAVE BEEN ELIMINATED</span>
 </div>
+
+<!-- ═══════════════════ HOW TO PLAY ════════════════════════════════════════ -->
 <div id="howtoplay-overlay">
   <div id="howtoplay-box">
     <div id="howtoplay-title">HOW TO PLAY</div>

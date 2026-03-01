@@ -6,12 +6,28 @@ export const WEAPON_DEFS = {
   sniper:   { id:'sniper',   name:'SNIPER',    maxAmmo:10, damage:95,  fireRate:1.2,  bulletSpeed:900,  bulletCount:1, spread:0.005, bulletLife:2.2,  bulletR:3,   color:'#00ffff', reloadTime:2800 },
   burst:    { id:'burst',    name:'2-BURST',   maxAmmo:24, damage:24,  fireRate:0.55, bulletSpeed:480,  bulletCount:1, burstCount:2, burstDelay:0.09, spread:0.06, bulletLife:1.2, bulletR:4, color:'#88ffff', reloadTime:1800 },
   trishot:  { id:'trishot',  name:'3-SHOT',    maxAmmo:24, damage:14,  fireRate:0.35, bulletSpeed:420,  bulletCount:3, spread:0.22,  bulletLife:1.1,  bulletR:4,   color:'#ffaa00', reloadTime:1900 },
-  lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:95,  fireRate:0.1,  bulletSpeed:1400, bulletCount:1, spread:0,     bulletLife:0.55, bulletR:5,   color:'#ff2222', reloadTime:3500, chargeTime:1.2, isLaser:true },
+  lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500,
+              chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
 };
 
 export const SPAWNABLE_WEAPONS = ['shotgun','sniper','burst','trishot','lasergun'];
 
 export let bullets = [];
+
+export function fireLaserBeam(shooter, def) {
+  const { x, y, angle, id: ownerId } = shooter;
+  const range = def.laserRange || 900;
+  let hitX = x + Math.cos(angle) * range;
+  let hitY = y + Math.sin(angle) * range;
+  const steps = 2000;
+  for (let s = 1; s <= steps; s++) {
+    const frac = s / steps;
+    const rx = x + Math.cos(angle) * range * frac;
+    const ry = y + Math.sin(angle) * range * frac;
+    if (isSolid(rx, ry)) { hitX = rx; hitY = ry; break; }
+  }
+  return { ownerId, x, y, angle, hitX, hitY, local: true };
+}
 
 export function fireBullets(shooter, def) {
   const { x, y, angle, color, id: ownerId, weaponId } = shooter;
@@ -24,16 +40,13 @@ export function fireBullets(shooter, def) {
     const ang = angle + fanOffset;
     newBullets.push({
       id: `b_${ownerId}_${Date.now()}_${i}`,
-      x: x + Math.cos(ang)*22,
-      y: y + Math.sin(ang)*22,
-      vx: Math.cos(ang)*def.bulletSpeed,
-      vy: Math.sin(ang)*def.bulletSpeed,
+      x: x + Math.cos(ang)*22, y: y + Math.sin(ang)*22,
+      vx: Math.cos(ang)*def.bulletSpeed, vy: Math.sin(ang)*def.bulletSpeed,
       life: def.bulletLife, maxLife: def.bulletLife,
       r: def.bulletR, dmg: def.damage,
       color: color||def.color, ownerId,
       weaponId: weaponId || def.id,
       local: true,
-      isLaser: def.isLaser || false,
     });
   }
   bullets.push(...newBullets);
@@ -45,12 +58,9 @@ export function addRemoteBullet(b) {
   const age = (Date.now() - (b.firedAt || Date.now())) / 1000;
   const remainingLife = Math.max(0, (b.maxLife || b.bulletLife || 1.3) - age);
   if (remainingLife <= 0) return;
-
-  const travelTime = age;
   bullets.push({
     ...b,
-    x: b.x + b.vx * travelTime,
-    y: b.y + b.vy * travelTime,
+    x: b.x + b.vx * age, y: b.y + b.vy * age,
     life: remainingLife,
     maxLife: b.maxLife || b.bulletLife || 1.3,
     local: false,
@@ -71,102 +81,82 @@ export function updateBullets(dt) {
   }
 }
 
+export function drawLaserAimBeam(ctx, shooter, progress) {
+  if (progress <= 0) return;
+  const { x, y, angle } = shooter;
+  const range = WEAPON_DEFS.lasergun.laserRange || 900;
+  let hitX = x + Math.cos(angle) * range, hitY = y + Math.sin(angle) * range;
+  for (let s = 1; s <= 2000; s++) {
+    const frac = s / 40;
+    const rx = x + Math.cos(angle) * range * frac, ry = y + Math.sin(angle) * range * frac;
+    if (isSolid(rx, ry)) { hitX = rx; hitY = ry; break; }
+  }
+  const p = Math.min(1, progress);
+  ctx.save();
+  ctx.globalAlpha = 0.12 + p * 0.18;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hitX, hitY);
+  ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 22 * p; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.globalAlpha = 0.35 + p * 0.3;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hitX, hitY);
+  ctx.strokeStyle = '#ff5555'; ctx.lineWidth = 7 * p; ctx.stroke();
+  ctx.globalAlpha = p * 0.65;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hitX, hitY);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+  ctx.shadowBlur = 14 * p; ctx.shadowColor = '#ff2222'; ctx.stroke();
+  const bx = x + Math.cos(angle)*20, by = y + Math.sin(angle)*20;
+  ctx.globalAlpha = p * 0.9;
+  ctx.beginPath(); ctx.arc(bx, by, 5 + p * 13, 0, Math.PI*2);
+  ctx.strokeStyle = `rgba(255,${40+p*180},40,${p})`; ctx.lineWidth = 2;
+  ctx.shadowBlur = 18; ctx.shadowColor = '#ff2222'; ctx.stroke();
+  ctx.restore();
+}
+
+export function drawActiveLaser(ctx, beam, t) {
+  const { x, y, hitX, hitY } = beam;
+  const flicker = 0.88 + 0.12 * Math.sin(t * 55);
+  ctx.save();
+  ctx.globalAlpha = 0.09 * flicker;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hitX, hitY);
+  ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.globalAlpha = 0.22 * flicker;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hitX, hitY);
+  ctx.strokeStyle = '#ff3333'; ctx.lineWidth = 18; ctx.stroke();
+  ctx.globalAlpha = 0.55 * flicker;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hitX, hitY);
+  ctx.strokeStyle = '#ff7777'; ctx.lineWidth = 5; ctx.stroke();
+  ctx.globalAlpha = 0.95 * flicker;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hitX, hitY);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+  ctx.shadowBlur = 28; ctx.shadowColor = '#ff2222'; ctx.stroke();
+  const ir = 5 + 3 * Math.sin(t * 38);
+  ctx.globalAlpha = flicker;
+  ctx.beginPath(); ctx.arc(hitX, hitY, ir, 0, Math.PI*2);
+  ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 28; ctx.shadowColor = '#ff0000'; ctx.fill();
+  for (let i = 0; i < 5; i++) {
+    const sa = t*14 + i*Math.PI*0.4;
+    const sl = 7 + 5*Math.sin(t*22 + i*1.3);
+    ctx.globalAlpha = 0.55 * flicker;
+    ctx.beginPath(); ctx.moveTo(hitX, hitY);
+    ctx.lineTo(hitX + Math.cos(sa)*sl, hitY + Math.sin(sa)*sl);
+    ctx.strokeStyle = '#ff8888'; ctx.lineWidth = 1.5; ctx.shadowBlur = 6; ctx.stroke();
+  }
+  ctx.restore();
+}
+
 export function drawBullets(ctx) {
   for (const b of bullets) {
     ctx.save();
-    const alpha = Math.min(1, b.life / b.maxLife * 2);
-    ctx.globalAlpha = alpha;
-
-    if (b.isLaser) {
-      // Laser beam: long bright streak with glow layers
-      const speed = Math.hypot(b.vx, b.vy);
-      const trailLen = 90 + speed * 0.05;
-      const dx = b.vx / speed, dy = b.vy / speed;
-
-      // Outer glow
-      ctx.beginPath();
-      ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - dx * trailLen, b.y - dy * trailLen);
-      ctx.strokeStyle = 'rgba(255,40,40,0.18)';
-      ctx.lineWidth = 18;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-
-      // Mid glow
-      ctx.beginPath();
-      ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - dx * trailLen * 0.75, b.y - dy * trailLen * 0.75);
-      ctx.strokeStyle = 'rgba(255,80,80,0.45)';
-      ctx.lineWidth = 7;
-      ctx.stroke();
-
-      // Core beam
-      ctx.beginPath();
-      ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - dx * trailLen * 0.5, b.y - dy * trailLen * 0.5);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2.5;
-      ctx.shadowBlur = 22; ctx.shadowColor = '#ff2222';
-      ctx.stroke();
-
-      // Leading tip
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowBlur = 30; ctx.shadowColor = '#ff2222';
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - b.vx*0.033, b.y - b.vy*0.033);
-      ctx.strokeStyle = b.color+'55'; ctx.lineWidth = b.r*1.4; ctx.stroke();
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
-      ctx.fillStyle = b.color; ctx.shadowBlur=10; ctx.shadowColor=b.color; ctx.fill();
-    }
-
+    ctx.globalAlpha = Math.min(1, b.life / b.maxLife * 2);
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x - b.vx*0.033, b.y - b.vy*0.033);
+    ctx.strokeStyle = b.color+'55'; ctx.lineWidth = b.r*1.4; ctx.stroke();
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+    ctx.fillStyle = b.color; ctx.shadowBlur=10; ctx.shadowColor=b.color; ctx.fill();
     ctx.restore();
   }
 }
 
-// Laser charge state — managed by fireBullets / main.js
-export const laserCharge = { charging: false, progress: 0 };
-
-export function drawLaserChargeBeam(ctx, shooter) {
-  if (!laserCharge.charging || laserCharge.progress <= 0) return;
-  const p = laserCharge.progress; // 0..1
-  const { x, y, angle } = shooter;
-  const len = 40 + p * 400;
-
-  ctx.save();
-  ctx.globalAlpha = p * 0.85;
-
-  // Wobble / shimmer flicker
-  const wobble = (Math.random() - 0.5) * (1 - p) * 8;
-  const a = angle + wobble * 0.04;
-  const ex2 = x + Math.cos(a) * len, ey2 = y + Math.sin(a) * len;
-
-  // Outer pulse glow
-  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex2, ey2);
-  ctx.strokeStyle = `rgba(255,0,0,${0.12 + p * 0.18})`;
-  ctx.lineWidth = 24 * p;
-  ctx.lineCap = 'round'; ctx.stroke();
-
-  // Inner glow
-  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex2, ey2);
-  ctx.strokeStyle = `rgba(255,80,80,${0.4 * p})`;
-  ctx.lineWidth = 8 * p; ctx.stroke();
-
-  // Core
-  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex2, ey2);
-  ctx.strokeStyle = `rgba(255,255,255,${0.6 * p})`;
-  ctx.lineWidth = 2; ctx.shadowBlur = 20 * p; ctx.shadowColor = '#ff2222'; ctx.stroke();
-
-  // Charge ring at barrel
-  ctx.beginPath(); ctx.arc(x + Math.cos(angle)*18, y + Math.sin(angle)*18, 4 + p * 10, 0, Math.PI*2);
-  ctx.strokeStyle = `rgba(255,60,60,${p * 0.9})`;
-  ctx.lineWidth = 2; ctx.shadowBlur = 18; ctx.stroke();
-
-  ctx.restore();
-}
 export function drawAmmoPickups(ctx, t, ammoPickups) {
   for (const pk of ammoPickups) {
     const pulse = 1 + 0.18 * Math.sin(t*3 + (pk.pulse||0));
