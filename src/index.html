@@ -6,13 +6,14 @@
 <title>The Crafted Game</title>
 <link rel="stylesheet" href="style/styles.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="shortcut icon" href="favicon.png" type="image/x-icon">
 </head>
 <body>
 <div id="lobby">
   <h1>THE CRAFTED GAME</h1>
   <div class="subtitle">BATTLE ARCADE</div>
   <div class="panel">
-    <label>CALLSIGN</label>
+    <label>GAMERTAG</label>
     <input id="player-name" type="text" placeholder="Enter your name" maxlength="14" autocomplete="off">
 
     <label>ROOM CODE</label>
@@ -22,7 +23,7 @@
     <div id="color-picker"></div>
 
     <button class="btn" id="join-btn"><i class="fa-solid fa-door-open"></i> JOIN / CREATE ROOM</button>
-    <button class="btn secondary" id="solo-btn"><i class="fa-solid fa-user"></i> SOLO (OFFLINE)</button>
+    <button class="btn secondary" id="solo-btn"><i class="fa-solid fa-user"></i> SOLO (DUEL BOTS)</button>
     <div id="solo-difficulty-row" style="display:none">
       <span class="diff-label">DIFFICULTY</span>
       <div id="diff-picker">
@@ -49,7 +50,7 @@
           <label class="mode-opt">
             <input type="radio" name="gamemode" value="lms">
             <i class="fa-solid fa-skull-crossbones"></i>
-            <span>LAST MAN</span>
+            <span>LAST MAN STANDING</span>
           </label>
           <label class="mode-opt">
             <input type="radio" name="gamemode" value="killlimit">
@@ -66,7 +67,7 @@
 </div>
 <canvas id="canvas"></canvas>
 <canvas id="minimap" width="160" height="120"></canvas>
-<div id="minimap-label">TACTICAL MAP</div>
+<div id="minimap-label">MINIMAP</div>
 <div id="hud">
   <div class="hud-row">
     <div class="hud-item">

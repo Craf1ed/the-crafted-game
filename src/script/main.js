@@ -1,4 +1,4 @@
-import { buildMap, drawMap, drawMinimap, drawTeleporters, TELEPORTERS,
+import { buildMap, loadMap, drawMap, drawMinimap, drawTeleporters, TELEPORTERS,
          getSeededPositions, randomOpenPos, WORLD_W, WORLD_H } from './map.js';
 import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
          fireBullets, addRemoteBullet, updateBullets,
@@ -27,6 +27,7 @@ import {
   playTeleport, playDeath, playRespawn, playDash,
   playKillStreak, playMatchStart, playMatchEnd,
 } from './audio.js';
+import { DASH_SPEED, DASH_DURATION, DASH_IFRAME } from './player.js';
 
 const canvas   = document.getElementById('canvas');
 const ctx      = canvas.getContext('2d');
@@ -80,8 +81,8 @@ let isHost     = false;
 let matchEnded = false;
 let isArcade   = false;
 let isImmune   = false;
-let killStreak = 0; 
-let lastKillTs = 0;   
+let killStreak = 0;
+let lastKillTs = 0;
 const RANDOM_NAMES = [
   'VOSS','RENKO','MIRA','AXEL','SABLE','FROST','QUINN','DECKER',
   'NOVA','REED','CAIRO','PIKE','ZARA','COLE','HEX','STONE',
@@ -169,7 +170,7 @@ async function handleSolo() {
   const diff = document.querySelector('input[name="diff"]:checked')?.value || 'medium';
   setDifficulty(diff);
 
-  buildMap();
+  await loadMap();
   const seed = roomHash('SOLO_'+name);
   const ammoPos   = getSeededPositions(seed,          20, 100);
   const weaponPos = getSeededPositions(seed + 99999,   5, 120).map((p,i)=>({
@@ -222,7 +223,7 @@ async function handleJoin(solo) {
   if (room === 'ARCADE') isArcade = true;
 
   setLobbyStatus('Connecting...','#0ff');
-  buildMap();
+  await loadMap();
 
   const seed = roomHash(room);
   const ammoPos   = getSeededPositions(seed,          20, 100);
@@ -628,6 +629,7 @@ function checkTeleporters() {
         localPlayer.y = dst.ty*40+20;
         localPlayer.vx=0; localPlayer.vy=0;
         localPlayer.teleportCooldown=1.2;
+        localPlayer.tpBurst = 1;
         playTeleport();
         triggerHitFlash(); return;
       }

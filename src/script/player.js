@@ -6,10 +6,10 @@ const MAX_SPEED    = 230;
 const FRICTION     = 10;
 export const PLAYER_RADIUS = 12;
 
-export const DASH_SPEED    = 900;
+export const DASH_SPEED    = 900; 
 export const DASH_DURATION = 0.22; 
-export const DASH_COOLDOWN = 1.1; 
-export const DASH_IFRAME   = 0.22;
+export const DASH_COOLDOWN = 1.1;  
+export const DASH_IFRAME   = 0.22;  
 
 export const COLOR_PALETTE = [
   '#00ffff','#ff4444','#44ff44','#ff44ff',
@@ -41,6 +41,7 @@ export function createLocalPlayer(id, name, color, spawnPos) {
     dashVx: 0,
     dashVy: 0,
     dashTrail: [],
+    tpBurst: 0,
   };
 }
 
@@ -48,46 +49,17 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   if (!player.alive) return;
 
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
+
   if (player.dashTimer > 0) {
     player.dashTimer -= dt;
+    if (player.dashTimer <= 0) {
+      player.dashing = false;
+    }
 
     if (!player.dashTrail) player.dashTrail = [];
     player.dashTrail.push({ x: player.x, y: player.y, age: 0 });
     if (player.dashTrail.length > 8) player.dashTrail.shift();
-
     for (const p of player.dashTrail) p.age += dt;
-
-    const progress = 1 - Math.max(0, player.dashTimer / DASH_DURATION);
-    const eased = 1 - progress * progress * 0.6;
-    const br = player.radius;
-
-    const nx = player.x + player.dashVx * eased * dt;
-    const okX = !isSolid(nx+br,player.y)&&!isSolid(nx-br,player.y)&&
-                !isSolid(nx+br,player.y-br+2)&&!isSolid(nx-br,player.y-br+2)&&
-                !isSolid(nx+br,player.y+br-2)&&!isSolid(nx-br,player.y+br-2);
-    if (okX) player.x = nx; else { player.dashVx *= -0.1; }
-
-    const ny = player.y + player.dashVy * eased * dt;
-    const okY = !isSolid(player.x+br,ny)&&!isSolid(player.x-br,ny)&&
-                !isSolid(player.x+br-2,ny-br)&&!isSolid(player.x-br+2,ny-br)&&
-                !isSolid(player.x+br-2,ny+br)&&!isSolid(player.x-br+2,ny+br);
-    if (okY) player.y = ny; else { player.dashVy *= -0.1; }
-
-    if (player.dashTimer <= 0) {
-      player.dashing = false;
-      player.vx = player.dashVx * 0.25;
-      player.vy = player.dashVy * 0.25;
-    }
-
-    player.angle = Math.atan2((mouseY + camY) - player.y, (mouseX + camX) - player.x);
-    if (player.shootCooldown    > 0) player.shootCooldown    -= dt;
-    if (player.hitFlash         > 0) player.hitFlash         -= dt;
-    if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
-    if (player.reloading) {
-      const def = WEAPON_DEFS[player.weaponId];
-      if (performance.now() - player.reloadStart >= def.reloadTime) player.reloading = false;
-    }
-    return;
   }
 
   if (player.dashTrail?.length) {
@@ -115,8 +87,9 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   player.vx += ax * dt;
   player.vy += ay * dt;
 
+  const currentMaxSpeed = player.dashing ? DASH_SPEED : MAX_SPEED;
   const spd = Math.hypot(player.vx, player.vy);
-  if (spd > MAX_SPEED) { player.vx = player.vx/spd * MAX_SPEED; player.vy = player.vy/spd * MAX_SPEED; }
+  if (spd > currentMaxSpeed) { player.vx = player.vx/spd * currentMaxSpeed; player.vy = player.vy/spd * currentMaxSpeed; }
 
   const r = player.radius;
 
@@ -137,6 +110,7 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   if (player.shootCooldown > 0)    player.shootCooldown -= dt;
   if (player.hitFlash      > 0)    player.hitFlash      -= dt;
   if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
+  if (player.tpBurst       > 0)    player.tpBurst       -= dt * 2.2;
 
   if (player.reloading) {
     const def = WEAPON_DEFS[player.weaponId];
@@ -170,11 +144,11 @@ export function tryDash(player, keys) {
   }
 
   const len = Math.hypot(dx, dy) || 1;
-  player.dashVx = (dx / len) * DASH_SPEED;
-  player.dashVy = (dy / len) * DASH_SPEED;
+  player.vx = (dx / len) * DASH_SPEED;
+  player.vy = (dy / len) * DASH_SPEED;
+  player.dashing      = true;
   player.dashTimer    = DASH_DURATION;
   player.dashCooldown = DASH_COOLDOWN;
-  player.dashing      = true;
   return true;
 }
 
@@ -220,6 +194,35 @@ export function removeRemoteRender(id) { delete remoteRender[id]; }
 
 export function drawLocalPlayer(ctx, player, t, immune = false) {
   if (!player.alive) return;
+
+  if (player.tpBurst > 0) {
+    const b = player.tpBurst;
+    const rings = 4;
+    for (let i = 0; i < rings; i++) {
+      const phase = i / rings;
+      const progress = Math.max(0, b - phase * 0.25);
+      if (progress <= 0) continue;
+      const eased = 1 - progress * progress;
+      const r = player.radius + eased * 80;
+      const alpha = progress * (1 - phase * 0.5) * 0.7;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(player.x, player.y, r, 0, Math.PI * 2);
+      ctx.strokeStyle = player.color;
+      ctx.lineWidth = 2.5 - i * 0.4;
+      ctx.stroke();
+      ctx.restore();
+    }
+    const flashAlpha = Math.max(0, player.tpBurst - 0.5) * 0.5;
+    if (flashAlpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = flashAlpha;
+      ctx.beginPath(); ctx.arc(player.x, player.y, player.radius * 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = player.color;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
 
   const trail = player.dashTrail;
   if (trail?.length > 2) {

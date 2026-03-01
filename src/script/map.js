@@ -1,8 +1,9 @@
-export const TILE    = 40;
-export const MAP_W   = 60;
-export const MAP_H   = 45;
-export const WORLD_W = MAP_W * TILE;
-export const WORLD_H = MAP_H * TILE;
+export const TILE = 40;
+
+export let MAP_W   = 60;
+export let MAP_H   = 45;
+export let WORLD_W = MAP_W * TILE;
+export let WORLD_H = MAP_H * TILE;
 
 export let MAP = [];
 export let TELEPORTERS = [];
@@ -18,7 +19,53 @@ function makeRng(seed) {
   };
 }
 
+
+export async function loadMap(path = 'map.txt') {
+  let text;
+  try {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    text = await res.text();
+  } catch (e) {
+    console.warn(`[MAP] Could not load ${path} (${e.message}) — using built-in map`);
+    buildMap();
+    return;
+  }
+
+  const lines = text.split('\n');
+  const tpLine = lines.find(l => l.trimStart().startsWith('# teleporters:'));
+  const dataLines = lines.filter(l => l.trim() && !l.trimStart().startsWith('#'));
+
+  const grid = dataLines.map(l => l.trim().split(/\s+/).map(Number));
+  if (grid.length === 0) { console.warn('[MAP] Empty map file — using built-in'); buildMap(); return; }
+
+  MAP_H  = grid.length;
+  MAP_W  = grid[0].length;
+  WORLD_W = MAP_W * TILE;
+  WORLD_H = MAP_H * TILE;
+  MAP    = grid;
+
+  TELEPORTERS = [];
+  if (tpLine) {
+    const raw = tpLine.replace('# teleporters:', '').trim();
+    for (const entry of raw.split('|')) {
+      const parts = entry.trim().split(',');
+      if (parts.length < 5) continue;
+      const [ax, ay, bx, by, color] = parts.map(p => p.trim());
+      TELEPORTERS.push({
+        a: { tx: parseInt(ax), ty: parseInt(ay) },
+        b: { tx: parseInt(bx), ty: parseInt(by) },
+        color: '#' + color,
+      });
+    }
+  }
+
+  console.log(`[MAP] Loaded ${MAP_W}x${MAP_H} from ${path}, ${TELEPORTERS.length} teleporters`);
+}
+
 export function buildMap() {
+  MAP_W = 60; MAP_H = 45;
+  WORLD_W = MAP_W * TILE; WORLD_H = MAP_H * TILE;
   const m = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(0));
   for (let x = 0; x < MAP_W; x++) { m[0][x] = 1; m[MAP_H-1][x] = 1; }
   for (let y = 0; y < MAP_H; y++) { m[y][0] = 1; m[y][MAP_W-1] = 1; }
