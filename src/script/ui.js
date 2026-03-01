@@ -143,6 +143,95 @@ export function triggerHitFlash() {
   _flashTimer=setTimeout(()=>el.classList.remove('hit'),90);
 }
 
+// ── Kill streak announcement ───────────────────
+const STREAK_LABELS = {
+  2: { text: 'DOUBLE KILL',   color: '#ffff00', glow: '#aaaa00' },
+  3: { text: 'TRIPLE KILL',   color: '#ff8800', glow: '#884400' },
+  4: { text: 'QUAD KILL',     color: '#ff44ff', glow: '#882288' },
+  5: { text: 'KILLING SPREE', color: '#ff2222', glow: '#881111' },
+};
+
+let _streakTimeout = null;
+export function showKillStreakAnnouncement(count, playerColor) {
+  const tier = Math.min(5, count);
+  const info = STREAK_LABELS[tier];
+  if (!info) return;
+
+  let el = document.getElementById('killstreak-announce');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'killstreak-announce';
+    el.style.cssText = `
+      position:fixed; top:22%; left:50%; transform:translateX(-50%);
+      font-family:'Orbitron',sans-serif; font-weight:900;
+      letter-spacing:.25em; text-align:center; z-index:30;
+      pointer-events:none; text-transform:uppercase;
+      transition:opacity .3s;
+    `;
+    document.body.appendChild(el);
+  }
+
+  const label = count > 5 ? `${count}x KILL` : info.text;
+  const color = count > 5 ? '#ff0044' : info.color;
+  const glow  = count > 5 ? '#880022' : info.glow;
+
+  el.style.cssText += `
+    color:${color}; text-shadow:0 0 20px ${color}, 0 0 60px ${glow};
+    font-size:${Math.min(2.8, 1.6 + (tier - 2) * 0.4)}rem;
+    opacity:1;
+  `;
+  el.innerHTML = `
+    <div>${label}</div>
+    <div style="font-size:.45em;color:${color}88;letter-spacing:.35em;margin-top:.2em">${count} IN A ROW</div>
+  `;
+
+  clearTimeout(_streakTimeout);
+  _streakTimeout = setTimeout(() => {
+    el.style.opacity = '0';
+  }, 2200);
+}
+
+// ── Dash cooldown HUD ──────────────────────────
+export function updateDashHUD(cooldownRemaining, maxCooldown) {
+  let el = document.getElementById('dash-hud');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'dash-hud';
+    el.style.cssText = `
+      position:fixed; bottom:88px; left:20px; z-index:10;
+      pointer-events:none; display:flex; align-items:center; gap:8px;
+      font-family:'Orbitron',monospace; font-size:.52rem; letter-spacing:.15em;
+    `;
+    el.innerHTML = `
+      <span style="color:rgba(0,180,140,.75)"><i class="fa-solid fa-bolt"></i> DASH</span>
+      <div id="dash-bar-bg" style="width:60px;height:4px;background:rgba(0,255,255,.1);border:1px solid rgba(0,255,255,.2)">
+        <div id="dash-bar-fill" style="height:100%;background:#0ff;transition:width .05s;box-shadow:0 0 6px #0ff"></div>
+      </div>
+      <span id="dash-ready-label" style="color:#0ff;font-size:.5rem"></span>
+    `;
+    document.getElementById('hud')?.appendChild(el);
+  }
+
+  const fill  = document.getElementById('dash-bar-fill');
+  const label = document.getElementById('dash-ready-label');
+  if (!fill || !label) return;
+
+  const pct = Math.max(0, 1 - cooldownRemaining / maxCooldown);
+  fill.style.width = (pct * 100) + '%';
+
+  if (cooldownRemaining <= 0) {
+    fill.style.background = '#0ff';
+    fill.style.boxShadow  = '0 0 8px #0ff';
+    label.textContent = 'READY';
+    label.style.color = '#0ff';
+  } else {
+    fill.style.background = 'rgba(0,255,255,.4)';
+    fill.style.boxShadow  = 'none';
+    label.textContent = cooldownRemaining.toFixed(1) + 's';
+    label.style.color = 'rgba(0,255,255,.4)';
+  }
+}
+
 function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }

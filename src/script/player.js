@@ -6,6 +6,11 @@ const MAX_SPEED    = 230;
 const FRICTION     = 10;
 export const PLAYER_RADIUS = 12;
 
+export const DASH_SPEED    = 820;   // burst velocity
+export const DASH_DURATION = 0.13;  // seconds of dash motion
+export const DASH_COOLDOWN = 1.1;   // seconds before next dash
+export const DASH_IFRAME   = 0.18;  // invincibility window during dash
+
 export const COLOR_PALETTE = [
   '#00ffff','#ff4444','#44ff44','#ff44ff',
   '#ffaa00','#44aaff','#ffffff','#ff88cc',
@@ -30,12 +35,55 @@ export function createLocalPlayer(id, name, color, spawnPos) {
     teleportCooldown: 0,
     respawnTimer: 0,
     respawning: false,
+    dashCooldown: 0,
+    dashTimer: 0,
+    dashing: false,
+    dashVx: 0,
+    dashVy: 0,
   };
 }
 
 export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) {
   if (!player.alive) return;
 
+  // ── Dash timers ──────────────────────────────
+  if (player.dashCooldown > 0) player.dashCooldown -= dt;
+  if (player.dashTimer    > 0) {
+    player.dashTimer -= dt;
+    // Apply dash velocity with wall collision
+    const br = player.radius;
+    const nx = player.x + player.dashVx * dt;
+    const okX = !isSolid(nx+br,player.y)&&!isSolid(nx-br,player.y)&&
+                !isSolid(nx+br,player.y-br+2)&&!isSolid(nx-br,player.y-br+2)&&
+                !isSolid(nx+br,player.y+br-2)&&!isSolid(nx-br,player.y+br-2);
+    if (okX) player.x = nx; else { player.dashVx *= -0.2; }
+
+    const ny = player.y + player.dashVy * dt;
+    const okY = !isSolid(player.x+br,ny)&&!isSolid(player.x-br,ny)&&
+                !isSolid(player.x+br-2,ny-br)&&!isSolid(player.x-br+2,ny-br)&&
+                !isSolid(player.x+br-2,ny+br)&&!isSolid(player.x-br+2,ny+br);
+    if (okY) player.y = ny; else { player.dashVy *= -0.2; }
+
+    if (player.dashTimer <= 0) {
+      player.dashing = false;
+      // Bleed dash momentum into normal velocity
+      player.vx = player.dashVx * 0.35;
+      player.vy = player.dashVy * 0.35;
+    }
+
+    // During dash, only update angle — skip normal movement
+    player.angle = Math.atan2((mouseY + camY) - player.y, (mouseX + camX) - player.x);
+    if (player.shootCooldown    > 0) player.shootCooldown    -= dt;
+    if (player.hitFlash         > 0) player.hitFlash         -= dt;
+    if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
+    if (player.reloading) {
+      const def = WEAPON_DEFS[player.weaponId];
+      if (performance.now() - player.reloadStart >= def.reloadTime) player.reloading = false;
+    }
+    return;
+  }
+
+  // ── Normal movement ────────────────────────────
   const moving = keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown']
               || keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'];
 
@@ -94,6 +142,32 @@ export function tryReload(player) {
   player.reloadStart = performance.now();
 }
 
+export function tryDash(player, keys) {
+  if (!player.alive) return false;
+  if (player.dashing) return false;
+  if (player.dashCooldown > 0) return false;
+
+  // Dash direction = movement input, fallback to facing angle
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup'])    dy -= 1;
+  if (keys['s'] || keys['arrowdown'])  dy += 1;
+  if (keys['a'] || keys['arrowleft'])  dx -= 1;
+  if (keys['d'] || keys['arrowright']) dx += 1;
+
+  if (dx === 0 && dy === 0) {
+    dx = Math.cos(player.angle);
+    dy = Math.sin(player.angle);
+  }
+
+  const len = Math.hypot(dx, dy) || 1;
+  player.dashVx = (dx / len) * DASH_SPEED;
+  player.dashVy = (dy / len) * DASH_SPEED;
+  player.dashTimer    = DASH_DURATION;
+  player.dashCooldown = DASH_COOLDOWN;
+  player.dashing      = true;
+  return true;
+}
+
 export function equipWeapon(player, weaponId) {
   const def = WEAPON_DEFS[weaponId]; if (!def) return;
   player.weaponId      = weaponId;
@@ -136,8 +210,22 @@ export function removeRemoteRender(id) { delete remoteRender[id]; }
 
 export function drawLocalPlayer(ctx, player, t, immune = false) {
   if (!player.alive) return;
+  // Draw dash afterimage trail
+  if (player.dashing) {
+    for (let i = 1; i <= 3; i++) {
+      const alpha = (0.22 - i * 0.06);
+      const trailX = player.x - player.dashVx * (i * 0.025);
+      const trailY = player.y - player.dashVy * (i * 0.025);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(trailX, trailY, player.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = player.color; ctx.lineWidth = 2;
+      ctx.shadowBlur = 12; ctx.shadowColor = player.color; ctx.stroke();
+      ctx.restore();
+    }
+  }
   _drawPlayer(ctx, player.x, player.y, player.angle, player.color,
-    player.hitFlash > 0, player.radius, player.name, player.hp, player.maxHp, t, true, immune);
+    player.hitFlash > 0, player.radius, player.name, player.hp, player.maxHp, t, true, immune, player.dashing);
 }
 
 export function drawRemotePlayer(ctx, p, t, immune = false) {
@@ -147,8 +235,15 @@ export function drawRemotePlayer(ctx, p, t, immune = false) {
     (p.hitFlash||0) > 0, PLAYER_RADIUS, p.name, p.hp, p.maxHp||100, t, false, immune);
 }
 
-function _drawPlayer(ctx, x, y, angle, color, flashing, radius, name, hp, maxHp, t, isLocal, immune) {
+function _drawPlayer(ctx, x, y, angle, color, flashing, radius, name, hp, maxHp, t, isLocal, immune, dashing = false) {
   ctx.save();
+
+  // Dash burst ring
+  if (dashing) {
+    ctx.beginPath(); ctx.arc(x, y, radius + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = color + 'bb'; ctx.lineWidth = 3;
+    ctx.shadowBlur = 22; ctx.shadowColor = color; ctx.stroke();
+  }
 
   if (immune) {
     const pulse = 0.7 + 0.3 * Math.sin(t * 5);

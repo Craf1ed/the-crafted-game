@@ -8,11 +8,11 @@ import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
          fireBullets, addRemoteBullet, updateBullets,
          drawBullets, drawAmmoPickups, drawWeaponPickups, drawDroppedWeapons,
          drawHealthPickups } from './weapons.js';
-import { createLocalPlayer, updateLocalPlayer, tryReload,
+import { createLocalPlayer, updateLocalPlayer, tryReload, tryDash,
          equipWeapon, refillAmmo,
          drawLocalPlayer, drawRemotePlayer, drawDeadPlayer,
          updateRemoteRender, tickRemoteRender, removeRemoteRender,
-         COLOR_PALETTE, PLAYER_RADIUS } from './player.js';
+         COLOR_PALETTE, PLAYER_RADIUS, DASH_COOLDOWN } from './player.js';
 import { initNetwork, joinRoom, checkNameTaken, setCallbacks,
          pushPlayerState, broadcastBullets, broadcastPickupTaken, broadcastPickupRespawn,
          broadcastWeaponDrop, removeWeaponDrop,
@@ -23,8 +23,14 @@ import { hideLobby, showHUD, setLobbyStatus,
          updateHealthHUD, updateAmmoHUD, updateWeaponHUD,
          renderLeaderboard, addKillFeed, tickKillFeed,
          showEliminatedOverlay, hideRespawnOverlay,
-         drawCrosshair, triggerHitFlash } from './ui.js';
+         drawCrosshair, triggerHitFlash,
+         showKillStreakAnnouncement, updateDashHUD } from './ui.js';
 import { initBots, tickBots, checkBotCollisions, drawBots, getBots, setDifficulty, setImmune } from './bots.js';
+import {
+  initAudio, playShoot, playReload, playHit, playPickup,
+  playTeleport, playDeath, playRespawn, playDash,
+  playKillStreak, playMatchStart, playMatchEnd,
+} from './audio.js';
 
 const canvas   = document.getElementById('canvas');
 const ctx      = canvas.getContext('2d');
@@ -41,7 +47,10 @@ window.addEventListener('keydown', e => {
   const tag=document.activeElement?.tagName;
   if (tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
   keys[e.key.toLowerCase()] = true;
-  if (e.key.toLowerCase()==='r' && localPlayer) tryReload(localPlayer);
+  if (e.key.toLowerCase()==='r' && localPlayer) { tryReload(localPlayer); if (localPlayer.reloading) playReload(); }
+  if ((e.key==='Shift'||e.key.toLowerCase()==='q') && localPlayer && gamePhase==='playing') {
+    if (tryDash(localPlayer, keys)) playDash();
+  }
   if (!['f5','f11','f12'].includes(e.key.toLowerCase())) e.preventDefault();
 });
 window.addEventListener('keyup',     e=>{ keys[e.key.toLowerCase()]=false; });
@@ -75,6 +84,8 @@ let isHost     = false;
 let matchEnded = false;
 let isArcade   = false;
 let isImmune   = false;
+let killStreak = 0;       // current consecutive kills without dying
+let lastKillTs = 0;       // timestamp of last kill (streak resets after 8s inactivity)
 function onColorPick(c) { myColor=c; renderColorPicker(COLOR_PALETTE, myColor, onColorPick); }
 renderColorPicker(COLOR_PALETTE, myColor, onColorPick);
 
@@ -127,6 +138,8 @@ async function handleSolo() {
   if (!name)         { setLobbyStatus('Enter a callsign!'); return; }
   if (name.length<2) { setLobbyStatus('Name too short (min 2)'); return; }
 
+  initAudio();  // start audio context on user gesture
+
   const diff = document.querySelector('input[name="diff"]:checked')?.value || 'medium';
   setDifficulty(diff);
 
@@ -149,16 +162,15 @@ async function handleSolo() {
  
   initBots(localPlayer, ammoPickups, healthPickups, {
     onKill: (bot) => {
-     
       localPlayer.kills = (localPlayer.kills || 0) + 1;
-      addKillFeed(localPlayer.name, localPlayer.color, bot.name, bot.color);
+      _registerKill(localPlayer, bot.name, bot.color);
     },
     onDamage: (dmg, bot) => {
-     
       if (!localPlayer.alive) return;
       localPlayer.hp -= dmg;
       localPlayer.hitFlash = 0.15;
       triggerHitFlash();
+      playHit(true);
       updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
       if (localPlayer.hp <= 0) handleDeath(bot.name, bot.color);
     },
@@ -179,6 +191,8 @@ async function handleJoin(solo) {
 
   if (!name)         { setLobbyStatus('Enter a callsign!'); return; }
   if (name.length<2) { setLobbyStatus('Name too short (min 2)'); return; }
+
+  initAudio(); // user gesture — safe to start AudioContext
 
   // ARCADE room is always endless, no host lock
   if (room === 'ARCADE') isArcade = true;
@@ -267,6 +281,7 @@ async function handleJoin(solo) {
         if (matchEnded) return;
         matchEnded = true;
         gamePhase = 'ended';
+        playMatchEnd();
         const el = document.getElementById('game-msg');
         if (!el) return;
         el.style.display='flex';
@@ -345,6 +360,7 @@ function startMatch() {
   updateWeaponHUD(localPlayer.weaponId);
   updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
   updateHealthHUD(100,100);
+  playMatchStart();
 }
 
 function showHowToPlay(mode, limit) {
@@ -370,6 +386,7 @@ function showHowToPlay(mode, limit) {
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-regular fa-circle-dot"></i> MOUSE</span> Aim</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE</span> Shoot</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-rotate"></i> R</span> Reload</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-bolt"></i> SHIFT / Q</span> Dash (1.1s cooldown, brief invincibility)</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-person-walking"></i> WALK OVER</span> Pick up items</div>
     <div style="margin-top:.8rem;font-size:.6rem;color:#0a8">${respawnNote}</div>
     <div class="pickup-row" style="margin-top:.6rem">
@@ -391,9 +408,27 @@ function showHowToPlay(mode, limit) {
 }
 
 
+// ── Kill streak helper ─────────────────────────
+function _registerKill(killer, victimName, victimColor) {
+  const now = Date.now();
+  // Reset streak if more than 8 seconds since last kill
+  if (now - lastKillTs > 8000) killStreak = 0;
+  killStreak++;
+  lastKillTs = now;
+
+  addKillFeed(killer.name, killer.color, victimName, victimColor);
+
+  if (killStreak >= 2) {
+    playKillStreak(killStreak);
+    showKillStreakAnnouncement(killStreak, killer.color);
+  }
+}
+
 function handleDeath(killerName, killerColor) {
   localPlayer.hp    = 0;
   localPlayer.alive = false;
+  killStreak = 0; // reset streak on death
+  playDeath();
 
   if (gameMode === 'solo') {
     // Solo: game over, show results
@@ -496,6 +531,7 @@ function doRespawn() {
 
   hideRespawnOverlay();
   document.getElementById('spectator-label').style.display='none';
+  playRespawn();
 
   updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
   updateWeaponHUD(localPlayer.weaponId);
@@ -513,6 +549,7 @@ function handleRemoteDamage(ev) {
   localPlayer.hp -= ev.dmg;
   localPlayer.hitFlash = 0.15;
   triggerHitFlash();
+  playHit(true);
   updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
 
   if (localPlayer.hp <= 0) {
@@ -537,17 +574,20 @@ function handleRemoteKill(kill) {
   if (processedKills.has(kid)) return;
   processedKills.add(kid);
 
-  if (kill.killerId===myId && localPlayer)
+  if (kill.killerId===myId && localPlayer) {
     localPlayer.kills = (localPlayer.kills||0) + 1;
-  else if (remotePlayers[kill.killerId])
-    remotePlayers[kill.killerId].kills = (remotePlayers[kill.killerId].kills||0) + 1;
+    const vc = remotePlayers[kill.victimId]?.color || '#ff4444';
+    _registerKill(localPlayer, kill.victimName, vc);
+  } else {
+    if (remotePlayers[kill.killerId])
+      remotePlayers[kill.killerId].kills = (remotePlayers[kill.killerId].kills||0) + 1;
+    const kc = remotePlayers[kill.killerId]?.color||'#ff4444';
+    const vc = kill.victimId===myId ? localPlayer?.color : remotePlayers[kill.victimId]?.color||'#ff4444';
+    addKillFeed(kill.killerName, kc, kill.victimName, vc);
+  }
 
   if (kill.victimId!==myId && remotePlayers[kill.victimId])
     remotePlayers[kill.victimId].alive = false;
-
-  const kc = kill.killerId===myId ? localPlayer?.color : remotePlayers[kill.killerId]?.color||'#ff4444';
-  const vc = kill.victimId===myId ? localPlayer?.color : remotePlayers[kill.victimId]?.color||'#ff4444';
-  addKillFeed(kill.killerName, kc, kill.victimName, vc);
 }
 
 
@@ -561,6 +601,7 @@ function checkTeleporters() {
         localPlayer.y = dst.ty*40+20;
         localPlayer.vx=0; localPlayer.vy=0;
         localPlayer.teleportCooldown=1.2;
+        playTeleport();
         triggerHitFlash(); return;
       }
     }
@@ -577,6 +618,7 @@ function checkPickups() {
       localPlayer.hp = Math.min(localPlayer.maxHp, localPlayer.hp + 30);
       delete healthPickups[id];
       broadcastPickupTaken(id);
+      playPickup('health');
       updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
       setTimeout(()=>{
         broadcastPickupRespawn(id, { ...pk, pulse: Math.random()*Math.PI*2 });
@@ -589,6 +631,7 @@ function checkPickups() {
       refillAmmo(localPlayer);
       delete ammoPickups[id];
       broadcastPickupTaken(id);
+      playPickup('ammo');
       // Respawn ammo after 8s at same slot
       setTimeout(()=>{
         const newPk = { ...pk, pulse: Math.random()*Math.PI*2 };
@@ -606,6 +649,7 @@ function checkPickups() {
         weaponDrops[did]={ weaponId:localPlayer.weaponId, x:dp.x, y:dp.y };
       }
       equipWeapon(localPlayer, wp.weaponId);
+      playPickup('weapon');
       delete weaponPickups[id];
       broadcastPickupTaken(id);
       // Respawn weapon pickup after 15s
@@ -624,6 +668,7 @@ function checkPickups() {
         weaponDrops[nid]={ weaponId:localPlayer.weaponId, x:dp.x, y:dp.y };
       }
       equipWeapon(localPlayer, drop.weaponId);
+      playPickup('weapon');
       delete weaponDrops[did];
       removeWeaponDrop(did);
     }
@@ -648,11 +693,12 @@ function checkOutgoingBulletHits() {
 
 function handleShoot() {
   const def=WEAPON_DEFS[localPlayer.weaponId];
-  if (localPlayer.ammo<=0) return; // out of ammo — must find a pickup
+  if (localPlayer.ammo<=0) return;
   if (def.burstCount) { fireBurstSequence(def); }
   else {
     const newBullets=fireBullets(localPlayer,def);
     broadcastBullets(newBullets);
+    playShoot(localPlayer.weaponId);
     localPlayer.ammo=Math.max(0,localPlayer.ammo-1);
     localPlayer.shootCooldown=def.fireRate;
   }
@@ -666,6 +712,7 @@ function fireBurstSequence(def) {
     if (shot>=def.burstCount||localPlayer.ammo<=0){ burstActive=false; localPlayer.shootCooldown=def.fireRate; return; }
     const nb=fireBullets(localPlayer,def);
     broadcastBullets(nb);
+    playShoot(localPlayer.weaponId);
     localPlayer.ammo=Math.max(0,localPlayer.ammo-1);
     shot++; setTimeout(fireOne, def.burstDelay*1000);
   }
@@ -705,13 +752,14 @@ function update(dt, ts){
     checkPickups();
     checkTeleporters();
     checkOutgoingBulletHits();
-    localPlayer.immune = isImmune;
+    localPlayer.immune = isImmune || (localPlayer.dashing && localPlayer.dashTimer > (DASH_DURATION - 0.18));
     pushPlayerState(localPlayer, ts);
 
     const def=WEAPON_DEFS[localPlayer.weaponId];
     updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
     updateAmmoHUD(localPlayer.ammo, def.maxAmmo, localPlayer.reloading);
     updateWeaponHUD(localPlayer.weaponId);
+    updateDashHUD(localPlayer.dashCooldown, DASH_COOLDOWN);
   } else if (gamePhase==='playing' && !localPlayer.alive) {
     // Spectate nearest alive player
     const alive=Object.values(remotePlayers).find(p=>p.alive);
