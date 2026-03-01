@@ -1,8 +1,3 @@
-// ═══════════════════════════════════════════════
-// WEAPONS.JS — Defs, client-side bullet simulation, pickup rendering
-// Pickup POSITIONS come from Firebase (seeded server-side)
-// ═══════════════════════════════════════════════
-
 import { isSolid } from './map.js';
 
 export const WEAPON_DEFS = {
@@ -15,7 +10,6 @@ export const WEAPON_DEFS = {
 
 export const SPAWNABLE_WEAPONS = ['shotgun','sniper','burst','trishot'];
 
-// Client-side bullet pool (local simulation only — NOT synced, no ghost bullets)
 export let bullets = [];
 
 export function fireBullets(shooter, def) {
@@ -43,16 +37,12 @@ export function fireBullets(shooter, def) {
   return newBullets;
 }
 
-// Remote bullets: created from Firebase events, expire by their own TTL
 export function addRemoteBullet(b) {
-  // Avoid duplicates
   if (bullets.some(existing => existing.id === b.id)) return;
-  // Calculate remaining life based on server timestamp
   const age = (Date.now() - (b.firedAt || Date.now())) / 1000;
   const remainingLife = Math.max(0, (b.maxLife || b.bulletLife || 1.3) - age);
-  if (remainingLife <= 0) return; // already expired, discard
+  if (remainingLife <= 0) return;
 
-  // Fast-forward position to current time
   const travelTime = age;
   bullets.push({
     ...b,
@@ -91,9 +81,6 @@ export function drawBullets(ctx) {
     ctx.restore();
   }
 }
-
-// ── Pickup rendering (positions come from Firebase/server state) ──
-
 export function drawAmmoPickups(ctx, t, ammoPickups) {
   for (const pk of ammoPickups) {
     const pulse = 1 + 0.18 * Math.sin(t*3 + (pk.pulse||0));
@@ -132,7 +119,6 @@ export function drawHealthPickups(ctx, t, healthPickups) {
   for (const pk of healthPickups) {
     const pulse = 1 + 0.18 * Math.sin(t*3 + (pk.pulse||0));
     ctx.save();
-    // Identical to ammo but red
     ctx.beginPath(); ctx.arc(pk.x, pk.y, 9*pulse, 0, Math.PI*2);
     ctx.fillStyle='rgba(255,60,60,0.08)'; ctx.fill();
     ctx.beginPath(); ctx.arc(pk.x, pk.y, 8, 0, Math.PI*2);

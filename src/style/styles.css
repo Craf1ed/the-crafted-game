@@ -3,7 +3,6 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; overflow:hidden; user-select:none; }
 
-/* ══ LOBBY ══ */
 #lobby {
   position:fixed; inset:0; z-index:100;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -82,10 +81,8 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 .lp-name { flex:1; color:#0ff; letter-spacing:.1em; }
 .lp-tag { color:#0a8; font-size:.6rem; }
 
-/* ══ CANVAS ══ */
 #canvas { display:block; cursor:none; }
 
-/* ══ HUD ══ */
 #hud {
   position:fixed; bottom:0; left:0;
   padding:14px 20px 18px; display:none; flex-direction:column; gap:9px;
@@ -115,7 +112,6 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 
-/* ══ LEADERBOARD ══ */
 #leaderboard {
   position:fixed; top:16px; right:16px; z-index:10; pointer-events:none;
   background:rgba(0,0,0,.82); border:1px solid rgba(0,255,255,.15);
@@ -132,7 +128,6 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 .lb-status { font-size:.8rem; }
 .lb-kills { color:#ffff00; font-size:.6rem; min-width:36px; text-align:right; }
 
-/* ══ KILL FEED ══ */
 #kill-feed {
   position:fixed; top:16px; left:16px; z-index:10; pointer-events:none;
   font-family:'Orbitron',monospace; font-size:.62rem; letter-spacing:.08em;
@@ -144,7 +139,6 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 }
 .kf-icon { color:rgba(255,255,255,.4); }
 
-/* ══ MINIMAP ══ */
 #minimap {
   position:fixed; bottom:16px; right:16px;
   border:1px solid rgba(0,255,255,.3); background:rgba(0,0,0,.92);
@@ -156,21 +150,18 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
   pointer-events:none; font-family:'Orbitron',sans-serif;
 }
 
-/* ══ CONTROLS HINT ══ */
 #controls-hint {
   position:fixed; bottom:130px; left:20px; font-size:.5rem;
   color:rgba(0,255,255,.18); z-index:10; line-height:2;
   pointer-events:none; letter-spacing:.12em;
 }
 
-/* ══ OVERLAYS ══ */
 #alert-flash {
   position:fixed; inset:0; pointer-events:none; z-index:5;
   box-shadow:inset 0 0 0 0 rgba(255,50,50,0); transition:box-shadow .06s;
 }
 #alert-flash.hit { box-shadow:inset 0 0 70px 24px rgba(255,40,40,.38); }
 
-/* Eliminated / respawn */
 #eliminated-overlay {
   position:fixed; inset:0; display:none;
   align-items:center; justify-content:center; flex-direction:column; gap:.8rem;
@@ -184,7 +175,6 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 #elim-killer { font-size:1rem; }
 #respawn-count { font-size:.9rem; color:#0ff; letter-spacing:.2em; margin-top:.5rem; animation:blink .8s infinite; }
 
-/* Spectator */
 #spectator-label {
   position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
   font-family:'Orbitron',monospace; font-size:.8rem; letter-spacing:.3em;
@@ -192,14 +182,11 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
   text-align:center; line-height:2;
 }
 
-/* Game message */
 #game-msg {
   position:fixed; inset:0; align-items:center; justify-content:center;
   background:rgba(0,0,0,.85); z-index:50; font-family:'Orbitron',sans-serif;
   font-size:2.8rem; font-weight:900; display:none;
 }
-
-/* ══ MODE PICKER ══ */
 #host-controls { display:none; }
 
 #mode-picker {
@@ -260,7 +247,34 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 }
 #host-start i { margin-right:6px; }
 
-/* ══ HOW TO PLAY POPUP ══ */
+#solo-difficulty-row {
+  display:flex; align-items:center; gap:7px;
+  margin-top:.35rem; margin-bottom:.1rem;
+}
+.diff-label {
+  font-size:.55rem; letter-spacing:.12em; color:rgba(0,180,140,.5);
+  white-space:nowrap; flex-shrink:0;
+}
+#diff-picker {
+  display:flex; gap:3px; flex-wrap:nowrap;
+}
+.diff-opt {
+  display:flex; align-items:center;
+  font-size:.55rem; letter-spacing:.08em; cursor:pointer;
+  padding:4px 7px;
+  border:1px solid rgba(0,255,255,.1);
+  background:rgba(0,0,0,.4);
+  color:rgba(0,180,140,.4);
+  transition:all .12s; white-space:nowrap;
+}
+.diff-opt input[type=radio] { display:none; }
+.diff-opt:hover { border-color:rgba(0,255,255,.28); color:rgba(0,255,255,.7); }
+.diff-opt.active {
+  border-color:rgba(0,255,255,.5);
+  color:#0ff;
+  background:rgba(0,255,255,.09);
+  box-shadow:0 0 6px rgba(0,255,255,.08);
+}
 #howtoplay-overlay {
   position:fixed; inset:0; z-index:60; display:none;
   align-items:center; justify-content:center;

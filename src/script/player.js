@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════
-// PLAYER.JS — Movement with wall-sliding, interpolation
-// ═══════════════════════════════════════════════
-
 import { isSolid, randomOpenPos } from './map.js';
 import { WEAPON_DEFS } from './weapons.js';
 
@@ -32,7 +28,7 @@ export function createLocalPlayer(id, name, color, spawnPos) {
     radius: PLAYER_RADIUS,
     hitFlash: 0,
     teleportCooldown: 0,
-    respawnTimer: 0,   // countdown seconds remaining
+    respawnTimer: 0,
     respawning: false,
   };
 }
@@ -43,7 +39,6 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   const moving = keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown']
               || keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'];
 
-  // Friction FIRST so wall-zeroed velocity doesn't double-damp on same frame
   const fricFactor = moving ? FRICTION : FRICTION * 2;
   const fric = Math.pow(1 - Math.min(fricFactor * dt, 0.99), 1);
   player.vx *= fric;
@@ -55,7 +50,6 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   if (keys['a'] || keys['arrowleft'])  ax -= ACCEL;
   if (keys['d'] || keys['arrowright']) ax += ACCEL;
 
-  // Normalise diagonal
   const il = Math.hypot(ax, ay);
   if (il > ACCEL) { ax = ax/il * ACCEL; ay = ay/il * ACCEL; }
 
@@ -67,33 +61,17 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
 
   const r = player.radius;
 
-  // Move X — slide along wall (only zero the blocked axis)
   const nx = player.x + player.vx * dt;
-  const clearX = !isSolid(nx + r, player.y)
-              && !isSolid(nx - r, player.y)
-              && !isSolid(nx + r, player.y - r + 2)
-              && !isSolid(nx - r, player.y - r + 2)
-              && !isSolid(nx + r, player.y + r - 2)
-              && !isSolid(nx - r, player.y + r - 2);
-  if (clearX) {
-    player.x = nx;
-  } else {
-    player.vx = 0;
-  }
+  const clearX = !isSolid(nx + r, player.y) && !isSolid(nx - r, player.y)
+              && !isSolid(nx + r, player.y - r + 2) && !isSolid(nx - r, player.y - r + 2)
+              && !isSolid(nx + r, player.y + r - 2) && !isSolid(nx - r, player.y + r - 2);
+  if (clearX) player.x = nx; else player.vx = 0;
 
-  // Move Y
   const ny = player.y + player.vy * dt;
-  const clearY = !isSolid(player.x + r, ny)
-              && !isSolid(player.x - r, ny)
-              && !isSolid(player.x + r - 2, ny - r)
-              && !isSolid(player.x - r + 2, ny - r)
-              && !isSolid(player.x + r - 2, ny + r)
-              && !isSolid(player.x - r + 2, ny + r);
-  if (clearY) {
-    player.y = ny;
-  } else {
-    player.vy = 0;
-  }
+  const clearY = !isSolid(player.x + r, ny) && !isSolid(player.x - r, ny)
+              && !isSolid(player.x + r - 2, ny - r) && !isSolid(player.x - r + 2, ny - r)
+              && !isSolid(player.x + r - 2, ny + r) && !isSolid(player.x - r + 2, ny + r);
+  if (clearY) player.y = ny; else player.vy = 0;
 
   player.angle = Math.atan2((mouseY + camY) - player.y, (mouseX + camX) - player.x);
 
@@ -101,21 +79,17 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   if (player.hitFlash      > 0)    player.hitFlash      -= dt;
   if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
 
-  // Reload completes — but only refills what the player already has loaded
-  // (actual ammo count is managed by pickups; reload just chambers what's available)
   if (player.reloading) {
     const def = WEAPON_DEFS[player.weaponId];
     if (performance.now() - player.reloadStart >= def.reloadTime) {
-      // No free ammo — reloading is cosmetic/timing only; ammo comes from pickups
       player.reloading = false;
     }
   }
 }
 
-// R key: only shows the reload animation if there's actually ammo to chamber
 export function tryReload(player) {
   if (player.reloading) return;
-  if (player.ammo <= 0) return; // nothing to reload with
+  if (player.ammo <= 0) return;
   player.reloading = true;
   player.reloadStart = performance.now();
 }
@@ -133,7 +107,6 @@ export function refillAmmo(player, amount = 10) {
   player.ammo = Math.min(def.maxAmmo, player.ammo + amount);
 }
 
-// ── Remote interpolation ──────────────────────
 const remoteRender = {};
 
 export function updateRemoteRender(id, data) {
@@ -161,55 +134,83 @@ export function getRemoteRenderPos(id, fallback) {
 
 export function removeRemoteRender(id) { delete remoteRender[id]; }
 
-// ── Drawing ───────────────────────────────────
-
-export function drawLocalPlayer(ctx, player, t) {
+export function drawLocalPlayer(ctx, player, t, immune = false) {
   if (!player.alive) return;
   _drawPlayer(ctx, player.x, player.y, player.angle, player.color,
-    player.hitFlash > 0, player.radius, player.name, player.hp, player.maxHp, t, true);
+    player.hitFlash > 0, player.radius, player.name, player.hp, player.maxHp, t, true, immune);
 }
 
-export function drawRemotePlayer(ctx, p, t) {
+export function drawRemotePlayer(ctx, p, t, immune = false) {
   if (!p.alive) return;
   const rp = getRemoteRenderPos(p.id, p);
   _drawPlayer(ctx, rp.x, rp.y, p.angle, p.color||'#ff4444',
-    (p.hitFlash||0) > 0, PLAYER_RADIUS, p.name, p.hp, p.maxHp||100, t, false);
+    (p.hitFlash||0) > 0, PLAYER_RADIUS, p.name, p.hp, p.maxHp||100, t, false, immune);
 }
 
-function _drawPlayer(ctx, x, y, angle, color, flashing, radius, name, hp, maxHp, t, isLocal) {
+function _drawPlayer(ctx, x, y, angle, color, flashing, radius, name, hp, maxHp, t, isLocal, immune) {
   ctx.save();
+
+  if (immune) {
+    const pulse = 0.7 + 0.3 * Math.sin(t * 5);
+    const rings = 3;
+    for (let i = 0; i < rings; i++) {
+      const phase = (t * 2 + i * (Math.PI * 2 / rings)) % (Math.PI * 2);
+      const r2 = radius + 14 + i * 6 + 4 * Math.sin(phase);
+      ctx.beginPath(); ctx.arc(x, y, r2, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,255,255,${0.25 * pulse})`;
+      ctx.lineWidth = 1.5;
+      ctx.shadowBlur = 18; ctx.shadowColor = '#fff';
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,255,255,${0.55 * pulse})`;
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 28; ctx.shadowColor = '#fff';
+    ctx.stroke();
+  }
+
   const pr = radius + (isLocal ? 8 : 6) + (isLocal ? 3 : 2)*Math.sin(t*4);
   ctx.beginPath(); ctx.arc(x, y, pr, 0, Math.PI*2);
-  ctx.strokeStyle=color+(isLocal?'22':'20'); ctx.lineWidth=1; ctx.stroke();
+  ctx.strokeStyle=color+(isLocal?'22':'20'); ctx.lineWidth=1; ctx.shadowBlur=0; ctx.stroke();
+
   const g=ctx.createRadialGradient(x,y,0,x,y,radius);
   g.addColorStop(0,color+(isLocal?'55':'44')); g.addColorStop(1,color+'00');
   ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI*2);
   ctx.fillStyle=g; ctx.fill();
+
   ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI*2);
-  ctx.strokeStyle=flashing?'#fff':color;
-  ctx.lineWidth=flashing?3:2;
-  ctx.shadowBlur=flashing?28:(isLocal?18:14);
-  ctx.shadowColor=flashing?'#fff':color;
+  ctx.strokeStyle = immune ? '#fff' : (flashing ? '#fff' : color);
+  ctx.lineWidth   = (immune || flashing) ? 3 : 2;
+  ctx.shadowBlur  = (immune || flashing) ? 28 : (isLocal ? 18 : 14);
+  ctx.shadowColor = immune ? '#fff' : (flashing ? '#fff' : color);
   ctx.stroke();
+
   ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2);
-  ctx.fillStyle=flashing?'#fff':color; ctx.shadowBlur=10; ctx.fill();
-  const gl=radius+14;
+  ctx.fillStyle = (immune || flashing) ? '#fff' : color;
+  ctx.shadowBlur = 10; ctx.fill();
+
+  const gl = radius + 14;
   ctx.beginPath();
   ctx.moveTo(x+Math.cos(angle)*6, y+Math.sin(angle)*6);
   ctx.lineTo(x+Math.cos(angle)*gl, y+Math.sin(angle)*gl);
   ctx.strokeStyle=color; ctx.lineWidth=3; ctx.shadowBlur=10; ctx.shadowColor=color; ctx.stroke();
+
   ctx.beginPath();
   ctx.arc(x+Math.cos(angle)*gl, y+Math.sin(angle)*gl, 3, 0, Math.PI*2);
   ctx.fillStyle='#fff'; ctx.shadowBlur=12; ctx.fill();
   ctx.shadowBlur=0;
-  ctx.font='700 9px Orbitron,monospace'; ctx.textAlign='center'; ctx.fillStyle=color;
+
+  ctx.font='700 9px Orbitron,monospace'; ctx.textAlign='center';
+  ctx.fillStyle = immune ? '#fff' : color;
   ctx.fillText((name||'???').toUpperCase(), x, y-radius-8);
+
   const bw=30, bh=4, bx=x-bw/2, by=y+radius+6;
   ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(bx-1,by-1,bw+2,bh+2);
   ctx.fillStyle='rgba(255,0,0,0.2)'; ctx.fillRect(bx,by,bw,bh);
   const pct=Math.max(0,(hp||0)/(maxHp||100));
   ctx.fillStyle=pct>0.5?'#00ff88':pct>0.25?'#ffff00':'#ff4444';
   ctx.fillRect(bx,by,bw*pct,bh);
+
   ctx.restore();
 }
 

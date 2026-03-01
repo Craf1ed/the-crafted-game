@@ -24,9 +24,8 @@ import { hideLobby, showHUD, setLobbyStatus,
          renderLeaderboard, addKillFeed, tickKillFeed,
          showEliminatedOverlay, hideRespawnOverlay,
          drawCrosshair, triggerHitFlash } from './ui.js';
-import { initBots, tickBots, checkBotCollisions, drawBots, getBots } from './bots.js';
+import { initBots, tickBots, checkBotCollisions, drawBots, getBots, setDifficulty, setImmune } from './bots.js';
 
-// ── Canvas ───────────────────────────────────
 const canvas   = document.getElementById('canvas');
 const ctx      = canvas.getContext('2d');
 const mmCanvas = document.getElementById('minimap');
@@ -35,7 +34,6 @@ const mmCtx    = mmCanvas.getContext('2d');
 function resize() { canvas.width=innerWidth; canvas.height=innerHeight; }
 resize(); window.addEventListener('resize', resize);
 
-// ── Input ────────────────────────────────────
 const keys = {};
 let mouseX=0, mouseY=0, mouseDown=false;
 
@@ -52,7 +50,6 @@ window.addEventListener('mousedown', ()=>mouseDown=true);
 window.addEventListener('mouseup',   ()=>mouseDown=false);
 canvas.addEventListener('contextmenu', e=>e.preventDefault());
 
-// ── State ─────────────────────────────────────
 let localPlayer   = null;
 let remotePlayers = {};
 let camX=0, camY=0;
@@ -60,13 +57,11 @@ let lastTime=0, gameRunning=false, gamePhase='lobby';
 let myId = 'p_'+Math.random().toString(36).slice(2);
 let myColor = COLOR_PALETTE[0];
 
-// Pickup state — driven by Firebase
-let ammoPickups   = {};  // id → {x,y,pulse}
-let weaponPickups = {};  // id → {x,y,weaponId,pulse}
-let healthPickups = {};  // id → {x,y,pulse}
-let weaponDrops   = {};  // id → {weaponId,x,y}
+let ammoPickups   = {};
+let weaponPickups = {};
+let healthPickups = {};
+let weaponDrops   = {};
 
-// Dedup sets
 let processedDamage = new Set();
 let processedKills  = new Set();
 
@@ -74,18 +69,15 @@ const RESPAWN_SECS = 5;
 let respawnTimer   = 0;
 let respawnHandle  = null;
 
-// Game mode state
-let gameMode     = 'endless'; // 'endless' | 'lms' | 'killlimit'
-let killLimit    = 10;
-let isHost       = false;
-let matchEnded   = false;
-let isArcade     = false; // ARCADE room is always endless, no host lock
-
-// ── Color picker ──────────────────────────────
+let gameMode   = 'endless';
+let killLimit  = 10;
+let isHost     = false;
+let matchEnded = false;
+let isArcade   = false;
+let isImmune   = false;
 function onColorPick(c) { myColor=c; renderColorPicker(COLOR_PALETTE, myColor, onColorPick); }
 renderColorPicker(COLOR_PALETTE, myColor, onColorPick);
 
-// ── Lobby wiring ──────────────────────────────
 document.getElementById('join-btn').addEventListener('click',  ()=>{
   const room = document.getElementById('room-code').value.trim().toUpperCase() || 'ARCADE';
   isArcade = room === 'ARCADE';
@@ -107,26 +99,36 @@ document.getElementById('host-start')?.addEventListener('click', () => {
   const modeEl = document.querySelector('input[name="gamemode"]:checked');
   gameMode  = modeEl?.value || 'endless';
   killLimit = parseInt(document.getElementById('kill-limit-val')?.value) || 10;
+  console.log('[MAIN] Host starting game, mode:', gameMode, 'killLimit:', killLimit);
   broadcastRoomMode(gameMode, killLimit);
-  // onRoomModeChanged will fire for everyone (including host) and launch the game
 });
 
-// Mode picker — JS-driven selected state (avoids :has() browser compat issues)
+
 document.querySelectorAll('input[name="gamemode"]').forEach(radio => {
   radio.addEventListener('change', () => {
     document.querySelectorAll('.mode-opt').forEach(el => el.classList.remove('active'));
     radio.closest('.mode-opt')?.classList.add('active');
   });
 });
-// Set initial active state
+
 const defaultRadio = document.querySelector('input[name="gamemode"]:checked');
 defaultRadio?.closest('.mode-opt')?.classList.add('active');
 
-// ── Solo bot mode ─────────────────────────────
+document.querySelectorAll('input[name="diff"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.diff-opt').forEach(el => el.classList.remove('active'));
+    radio.closest('.diff-opt')?.classList.add('active');
+  });
+});
+document.querySelector('input[name="diff"]:checked')?.closest('.diff-opt')?.classList.add('active');
+
 async function handleSolo() {
   const name = document.getElementById('player-name').value.trim();
   if (!name)         { setLobbyStatus('Enter a callsign!'); return; }
   if (name.length<2) { setLobbyStatus('Name too short (min 2)'); return; }
+
+  const diff = document.querySelector('input[name="diff"]:checked')?.value || 'medium';
+  setDifficulty(diff);
 
   buildMap();
   const seed = roomHash('SOLO_'+name);
@@ -144,15 +146,15 @@ async function handleSolo() {
   gameMode  = 'solo';
   gamePhase = 'playing';
 
-  // Init bots — pass live pickup refs so bots can consume them
+ 
   initBots(localPlayer, ammoPickups, healthPickups, {
     onKill: (bot) => {
-      // Bot was killed by player
+     
       localPlayer.kills = (localPlayer.kills || 0) + 1;
       addKillFeed(localPlayer.name, localPlayer.color, bot.name, bot.color);
     },
     onDamage: (dmg, bot) => {
-      // Bot bullet hit player
+     
       if (!localPlayer.alive) return;
       localPlayer.hp -= dmg;
       localPlayer.hitFlash = 0.15;
@@ -170,7 +172,7 @@ async function handleSolo() {
   startGameLoop();
 }
 
-// ── Join ──────────────────────────────────────
+
 async function handleJoin(solo) {
   const name = document.getElementById('player-name').value.trim();
   const room = document.getElementById('room-code').value.trim().toUpperCase() || 'ARCADE';
@@ -244,6 +246,7 @@ async function handleJoin(solo) {
       onKillRegistered:  handleRemoteKill,
       onDamageReceived:  handleRemoteDamage,
       onRoomModeChanged: (meta) => {
+        console.log('[MAIN] onRoomModeChanged fired, gamePhase:', gamePhase, 'meta:', meta);
         // ARCADE room ignores mode changes — always endless
         if (!isArcade) {
           gameMode  = meta.mode  || 'endless';
@@ -251,6 +254,7 @@ async function handleJoin(solo) {
         }
         // Launch anyone still in lobby — idempotent, safe to call multiple times
         if (gamePhase === 'lobby') {
+          console.log('[MAIN] launching game for', isHost ? 'HOST' : 'GUEST');
           gamePhase = 'playing';
           hideLobby(); showHUD();
           showHowToPlay(isArcade ? 'endless' : gameMode, killLimit);
@@ -323,7 +327,7 @@ async function handleJoin(solo) {
   }
 }
 
-// Room code → deterministic seed integer
+
 function roomHash(str) {
   let h = 0x811c9dc5;
   for (let i=0;i<str.length;i++) {
@@ -333,7 +337,7 @@ function roomHash(str) {
   return h;
 }
 
-// ── Start match (called by host) ──────────────
+
 function startMatch() {
   gamePhase='playing';
   hideLobby(); showHUD();
@@ -343,7 +347,6 @@ function startMatch() {
   updateHealthHUD(100,100);
 }
 
-// ── How To Play popup ─────────────────────────
 function showHowToPlay(mode, limit) {
   const overlay = document.getElementById('howtoplay-overlay');
   const modeEl  = document.getElementById('howtoplay-mode');
@@ -354,7 +357,7 @@ function showHowToPlay(mode, limit) {
     endless:   '<i class="fa-solid fa-infinity"></i> ENDLESS — Respawn every 5s. No end. Chase that kill count.',
     lms:       '<i class="fa-solid fa-skull-crossbones"></i> LAST MAN STANDING — One life only. Last player alive wins.',
     killlimit: `<i class="fa-solid fa-trophy"></i> KILL LIMIT — First to <strong>${limit}</strong> kills wins. Respawn in 5s.`,
-    solo:      '<i class="fa-solid fa-robot"></i> SOLO vs BOTS — Survive against smart AI enemies. One life. Good luck.',
+    solo:      '<i class="fa-solid fa-robot"></i> SOLO vs BOTS — Survive against AI enemies. One life. Good luck.',
   };
   modeEl.innerHTML = modeText[mode] || modeText.endless;
 
@@ -366,7 +369,7 @@ function showHowToPlay(mode, limit) {
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-arrow-up"></i><i class="fa-solid fa-arrow-down"></i><i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-arrow-right"></i> WASD</span> Move</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-regular fa-circle-dot"></i> MOUSE</span> Aim</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE</span> Shoot</div>
-    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-rotate"></i> R</span> Reload (uses ammo from pickups)</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-rotate"></i> R</span> Reload</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-person-walking"></i> WALK OVER</span> Pick up items</div>
     <div style="margin-top:.8rem;font-size:.6rem;color:#0a8">${respawnNote}</div>
     <div class="pickup-row" style="margin-top:.6rem">
@@ -376,13 +379,18 @@ function showHowToPlay(mode, limit) {
       <div class="pickup-item"><span style="color:#ff44ff;font-size:10px">⬡</span> Teleporters</div>
     </div>`;
 
+  isImmune = true;
+  setImmune(true);
   overlay.style.display = 'flex';
+
   document.getElementById('howtoplay-close').onclick = () => {
     overlay.style.display = 'none';
+    isImmune = false;
+    setImmune(false);
   };
 }
 
-// ── Death & Respawn ───────────────────────────
+
 function handleDeath(killerName, killerColor) {
   localPlayer.hp    = 0;
   localPlayer.alive = false;
@@ -495,11 +503,12 @@ function doRespawn() {
   pushPlayerState(localPlayer, performance.now());
 }
 
-// ── Damage handler ────────────────────────────
+
 function handleRemoteDamage(ev) {
   if (processedDamage.has(ev.id)) return;
   processedDamage.add(ev.id);
   if (ev.victimId!==myId || !localPlayer?.alive) return;
+  if (isImmune) return;
 
   localPlayer.hp -= ev.dmg;
   localPlayer.hitFlash = 0.15;
@@ -541,7 +550,7 @@ function handleRemoteKill(kill) {
   addKillFeed(kill.killerName, kc, kill.victimName, vc);
 }
 
-// ── Teleporters ───────────────────────────────
+
 function checkTeleporters() {
   if (!localPlayer.alive||localPlayer.teleportCooldown>0) return;
   for (const tp of TELEPORTERS) {
@@ -558,7 +567,7 @@ function checkTeleporters() {
   }
 }
 
-// ── Pickups ───────────────────────────────────
+
 function checkPickups() {
   if (!localPlayer.alive) return;
   const r = PLAYER_RADIUS;
@@ -636,7 +645,7 @@ function checkOutgoingBulletHits() {
   }
 }
 
-// ── Shooting ──────────────────────────────────
+
 function handleShoot() {
   const def=WEAPON_DEFS[localPlayer.weaponId];
   if (localPlayer.ammo<=0) return; // out of ammo — must find a pickup
@@ -664,7 +673,7 @@ function fireBurstSequence(def) {
 }
 
 
-// ── Game loop ─────────────────────────────────
+
 function startGameLoop(){
   if (gameRunning) return;
   lastTime=performance.now(); gameRunning=true;
@@ -696,6 +705,7 @@ function update(dt, ts){
     checkPickups();
     checkTeleporters();
     checkOutgoingBulletHits();
+    localPlayer.immune = isImmune;
     pushPlayerState(localPlayer, ts);
 
     const def=WEAPON_DEFS[localPlayer.weaponId];
@@ -714,7 +724,7 @@ function update(dt, ts){
   updateBullets(dt);
   tickKillFeed();
 
-  // Solo mode — tick bot AI and check collisions
+ 
   if (gameMode === 'solo') {
     tickBots(dt);
     checkBotCollisions(myId);
@@ -744,13 +754,13 @@ function checkWinCondition() {
   }
 }
 
-// ── Render ────────────────────────────────────
+
 function draw(ts){
   const t=ts/1000;
   ctx.fillStyle='#000';
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // Screen-space grid
+ 
   ctx.save();
   ctx.strokeStyle='rgba(0,255,255,0.028)'; ctx.lineWidth=1;
   const gox=camX%40, goy=camY%40;
@@ -773,20 +783,19 @@ function draw(ts){
   drawBullets(ctx);
 
   for (const [,p] of Object.entries(remotePlayers))
-    p.alive ? drawRemotePlayer(ctx,p,t) : drawDeadPlayer(ctx,p,t);
+    p.alive ? drawRemotePlayer(ctx,p,t,p.immune) : drawDeadPlayer(ctx,p,t);
 
-  // Solo mode — draw bots
   if (gameMode === 'solo') drawBots(ctx, t);
 
   if (localPlayer)
-    localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t) : drawDeadPlayer(ctx,localPlayer,t);
+    localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t,isImmune) : drawDeadPlayer(ctx,localPlayer,t);
   ctx.restore();
 
   if (localPlayer?.alive && gamePhase==='playing')
     drawCrosshair(ctx,mouseX,mouseY,localPlayer.color);
 
   const allP = localPlayer ? {[myId]:localPlayer,...remotePlayers} : remotePlayers;
-  // In solo mode, add bots to the minimap player list
+ 
   if (gameMode === 'solo') {
     for (const bot of getBots()) allP[bot.id] = bot;
   }
@@ -802,7 +811,7 @@ function draw(ts){
       : {[myId]:localPlayer,...remotePlayers});
 }
 
-// ── Utility ───────────────────────────────────
+
 function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }

@@ -8,8 +8,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
-
-<!-- ══ LOBBY ══ -->
 <div id="lobby">
   <h1>THE CRAFTED GAME</h1>
   <div class="subtitle">BATTLE ARCADE</div>
@@ -25,15 +23,21 @@
 
     <button class="btn" id="join-btn"><i class="fa-solid fa-door-open"></i> JOIN / CREATE ROOM</button>
     <button class="btn secondary" id="solo-btn"><i class="fa-solid fa-user"></i> SOLO (OFFLINE)</button>
+    <div id="solo-difficulty-row">
+      <span class="diff-label">DIFFICULTY</span>
+      <div id="diff-picker">
+        <label class="diff-opt active"><input type="radio" name="diff" value="noob"> NOOB</label>
+        <label class="diff-opt"><input type="radio" name="diff" value="easy"> EASY</label>
+        <label class="diff-opt active-default"><input type="radio" name="diff" value="medium" checked> MEDIUM</label>
+        <label class="diff-opt"><input type="radio" name="diff" value="hard"> HARD</label>
+        <label class="diff-opt"><input type="radio" name="diff" value="god"> GOD</label>
+      </div>
+    </div>
     <button class="btn global" id="global-btn"><i class="fa-solid fa-bolt"></i> JOIN GLOBAL ARCADE</button>
-
     <div id="status-msg"></div>
-
     <div id="lobby-waiting">
       <div class="lw-title">PLAYERS IN ROOM</div>
       <div id="lobby-players"></div>
-
-      <!-- Host-only game mode picker -->
       <div id="host-controls">
         <div class="lw-title" style="margin-top:.9rem">GAME MODE</div>
         <div id="mode-picker">
@@ -60,15 +64,9 @@
   </div>
   <div class="lobby-info"><i class="fa-solid fa-circle-info"></i> Create a room to set the game mode &nbsp;·&nbsp; Join any existing room to play</div>
 </div>
-
-<!-- ══ CANVAS ══ -->
 <canvas id="canvas"></canvas>
-
-<!-- ══ MINIMAP ══ -->
 <canvas id="minimap" width="160" height="120"></canvas>
 <div id="minimap-label">TACTICAL MAP</div>
-
-<!-- ══ HUD ══ -->
 <div id="hud">
   <div class="hud-row">
     <div class="hud-item">
@@ -88,23 +86,13 @@
     </div>
   </div>
 </div>
-
-<!-- ══ RELOAD ══ -->
 <div id="reload-indicator"><i class="fa-solid fa-rotate"></i> RELOADING</div>
-
-<!-- ══ LEADERBOARD ══ -->
 <div id="leaderboard"></div>
-
-<!-- ══ KILL FEED ══ -->
 <div id="kill-feed"></div>
-
-<!-- ══ CONTROLS HINT ══ -->
 <div id="controls-hint">
   <i class="fa-solid fa-arrow-up-right-and-arrow-down-left-from-center"></i> WASD — MOVE &nbsp;·&nbsp; <i class="fa-regular fa-circle-dot"></i> MOUSE — AIM<br>
   <i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE — SHOOT &nbsp;·&nbsp; <i class="fa-solid fa-r"></i> — RELOAD
 </div>
-
-<!-- ══ OVERLAYS ══ -->
 <div id="alert-flash"></div>
 
 <div id="eliminated-overlay">
@@ -116,8 +104,6 @@
   <i class="fa-solid fa-eye"></i> SPECTATING<br>
   <span style="font-size:.6rem;color:rgba(0,255,255,.2)">YOU HAVE BEEN ELIMINATED</span>
 </div>
-
-<!-- ══ HOW TO PLAY POPUP ══ -->
 <div id="howtoplay-overlay">
   <div id="howtoplay-box">
     <div id="howtoplay-title">HOW TO PLAY</div>

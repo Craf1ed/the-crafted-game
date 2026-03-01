@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════
-// UI.JS — HUD, Leaderboard, Overlays
-// ═══════════════════════════════════════════════
-
 export { COLOR_PALETTE } from './player.js';
 import { WEAPON_DEFS } from './weapons.js';
 
@@ -37,7 +33,6 @@ export function renderLobbyPlayers(players, myId) {
     </div>`).join('');
 }
 
-// ── HUD ──────────────────────────────────────
 export function showHUD() { document.getElementById('hud').style.display='flex'; }
 
 export function updateHealthHUD(hp, maxHp) {
@@ -70,12 +65,10 @@ export function updateWeaponHUD(weaponId) {
   if (el){ el.textContent=def.name; el.style.color=def.color; }
 }
 
-// ── Respawn countdown ────────────────────────
 export function showRespawnOverlay(seconds) {
   const el = document.getElementById('eliminated-overlay'); if (!el) return;
   el.style.display='flex';
   const killerEl = el.querySelector('#elim-killer');
-  // Reuse killer line for countdown
   const countEl = el.querySelector('#respawn-count');
   if (countEl) countEl.textContent = seconds > 0 ? `RESPAWNING IN ${seconds}s` : 'RESPAWNING...';
 }
@@ -92,7 +85,6 @@ export function showEliminatedOverlay(killerName, killerColor) {
   if (ke){ ke.textContent=killerName||'???'; ke.style.color=killerColor||'#f44'; }
 }
 
-// ── Leaderboard ───────────────────────────────
 export function renderLeaderboard(players) {
   const el = document.getElementById('leaderboard'); if (!el) return;
   const sorted = Object.values(players).sort((a,b)=>(b.kills||0)-(a.kills||0));
@@ -107,7 +99,6 @@ export function renderLeaderboard(players) {
       </div>`).join('');
 }
 
-// ── Kill feed ─────────────────────────────────
 const killFeed = [];
 export function addKillFeed(killerName, killerColor, victimName, victimColor) {
   killFeed.unshift({ killerName, killerColor, victimName, victimColor, ts: Date.now() });
@@ -130,7 +121,6 @@ export function tickKillFeed() {
   if (killFeed.length!==before) _renderKillFeed();
 }
 
-// ── Crosshair ────────────────────────────────
 export function drawCrosshair(ctx, sx, sy, color) {
   ctx.save();
   ctx.strokeStyle=(color||'#00ffff')+'cc'; ctx.lineWidth=1.5;
@@ -146,7 +136,6 @@ export function drawCrosshair(ctx, sx, sy, color) {
   ctx.restore();
 }
 
-// ── Hit flash ────────────────────────────────
 let _flashTimer=null;
 export function triggerHitFlash() {
   const el=document.getElementById('alert-flash'); if (!el) return;

@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════
-// MAP.JS — Deterministic map + seeded pickup positions
-// ═══════════════════════════════════════════════
-
 export const TILE    = 40;
 export const MAP_W   = 60;
 export const MAP_H   = 45;
@@ -11,7 +7,6 @@ export const WORLD_H = MAP_H * TILE;
 export let MAP = [];
 export let TELEPORTERS = [];
 
-// Seeded deterministic RNG (Mulberry32) — same output on every client
 function makeRng(seed) {
   let s = seed >>> 0;
   return () => {
@@ -92,7 +87,6 @@ export function isOpenTile(tx, ty) {
   return true;
 }
 
-// Deterministic positions — identical on all clients for same seed
 export function getSeededPositions(seed, count, minDist=100) {
   const rng=makeRng(seed);
   const out=[];
@@ -157,11 +151,10 @@ export function drawTeleporters(ctx, t) {
 function _drawPad(ctx, wx, wy, color, t) {
   const R=20;
   const pulse=0.88+0.12*Math.sin(t*2.5);
-  const scan=(t*60)%((R*2)+8)-R-4; // scan line sweeping top→bottom
+  const scan=(t*60)%((R*2)+8)-R-4; 
 
   ctx.save();
 
-  // Hexagonal floor tile
   ctx.beginPath();
   for(let i=0;i<6;i++){
     const a=i/6*Math.PI*2 - Math.PI/6;
@@ -173,7 +166,6 @@ function _drawPad(ctx, wx, wy, color, t) {
   ctx.strokeStyle=color+'55'; ctx.lineWidth=1.5;
   ctx.shadowBlur=10; ctx.shadowColor=color; ctx.stroke();
 
-  // Inner hex, smaller
   ctx.beginPath();
   for(let i=0;i<6;i++){
     const a=i/6*Math.PI*2 - Math.PI/6;
@@ -183,7 +175,6 @@ function _drawPad(ctx, wx, wy, color, t) {
   ctx.closePath();
   ctx.strokeStyle=color+'88'; ctx.lineWidth=1; ctx.shadowBlur=6; ctx.stroke();
 
-  // Radial gradient pool
   ctx.beginPath();
   for(let i=0;i<6;i++){
     const a=i/6*Math.PI*2 - Math.PI/6;
@@ -197,12 +188,10 @@ function _drawPad(ctx, wx, wy, color, t) {
   g.addColorStop(0,color+'44'); g.addColorStop(0.6,color+'11'); g.addColorStop(1,color+'00');
   ctx.fillStyle=g; ctx.fill();
 
-  // Animated scan line inside hex
   ctx.fillStyle=color+'28';
   ctx.fillRect(wx-R, wy+scan, R*2, 3);
   ctx.restore();
 
-  // Pulsing centre dot
   ctx.beginPath(); ctx.arc(wx,wy,4*pulse,0,Math.PI*2);
   ctx.fillStyle=color+'cc'; ctx.shadowBlur=14; ctx.shadowColor=color; ctx.fill();
 
