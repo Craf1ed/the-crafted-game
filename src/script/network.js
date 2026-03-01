@@ -153,6 +153,7 @@ export function pushPlayerState(player, ts) {
       weaponId: player.weaponId, ammo: player.ammo,
       kills: player.kills, hitFlash: player.hitFlash > 0 ? 1 : 0,
       name: player.name, color: player.color, id: player.id,
+      immune: player.immune ? true : false,
     });
   } catch(e) {}
 }
