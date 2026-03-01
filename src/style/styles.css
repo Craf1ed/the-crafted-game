@@ -201,55 +201,62 @@ body { background:#000; color:#0ff; font-family:'Share Tech Mono',monospace; ove
 
 /* ══ MODE PICKER ══ */
 #host-controls { display:none; }
-#mode-picker { display:flex; flex-direction:column; gap:5px; margin-top:.5rem; }
+
+#mode-picker {
+  display:flex; flex-direction:row; gap:5px; margin-top:.4rem; flex-wrap:wrap;
+}
 
 .mode-opt {
-  display:flex; align-items:center; gap:10px;
-  font-size:.65rem; letter-spacing:.12em; color:rgba(0,180,140,.7); cursor:pointer;
-  padding:9px 12px;
-  border:1px solid rgba(0,255,255,.08);
-  background:rgba(0,255,255,.02);
-  transition:border-color .15s, background .15s, color .15s;
-  position:relative; overflow:hidden;
+  display:flex; align-items:center; gap:5px;
+  font-size:.58rem; letter-spacing:.1em; cursor:pointer;
+  padding:5px 9px;
+  border:1px solid rgba(0,255,255,.12);
+  background:rgba(0,0,0,.4);
+  color:rgba(0,180,140,.45);
+  transition:all .15s;
+  position:relative; white-space:nowrap;
+  flex-shrink:0;
 }
-.mode-opt::before {
-  content:''; position:absolute;
-  top:0; left:0; bottom:0; width:2px;
-  background:transparent;
-  transition:background .15s, box-shadow .15s;
+.mode-opt input[type=radio] { display:none; }
+
+.mode-opt i {
+  font-size:.58rem;
+  opacity:.45;
+  transition:opacity .15s;
 }
+
 .mode-opt:hover {
-  border-color:rgba(0,255,255,.25);
-  background:rgba(0,255,255,.05);
-  color:#0ff;
+  border-color:rgba(0,255,255,.3);
+  color:rgba(0,255,255,.7);
+  background:rgba(0,255,255,.04);
 }
+.mode-opt:hover i { opacity:.7; }
+
 .mode-opt.active {
-  border-color:rgba(0,255,255,.45);
-  background:rgba(0,255,255,.09);
+  border-color:rgba(0,255,255,.55);
   color:#0ff;
+  background:rgba(0,255,255,.1);
+  box-shadow: 0 0 8px rgba(0,255,255,.1);
 }
-.mode-opt.active::before {
+.mode-opt.active i { opacity:1; color:#0ff; }
+.mode-opt.active::after {
+  content:'';
+  position:absolute; bottom:-1px; left:10%; right:10%; height:1px;
   background:#0ff;
-  box-shadow:0 0 8px #0ff, 0 0 16px rgba(0,255,255,.4);
+  box-shadow: 0 0 6px #0ff;
 }
-.mode-opt input[type=radio] {
-  accent-color:#0ff; cursor:pointer;
-  width:13px; height:13px; flex-shrink:0;
-}
-.mode-opt span { display:flex; align-items:center; gap:8px; flex:1; }
-.mode-opt span i { width:14px; text-align:center; opacity:.75; }
-.mode-opt.active span i { opacity:1; }
 
 .mode-opt input[type=number] {
-  background:rgba(0,255,255,.08); border:1px solid rgba(0,255,255,.3);
-  color:#0ff; padding:3px 6px; font-family:'Share Tech Mono',monospace;
-  font-size:.72rem; outline:none; width:48px; text-align:center;
+  background:rgba(0,255,255,.1); border:1px solid rgba(0,255,255,.35);
+  color:#0ff; padding:2px 4px; font-family:'Share Tech Mono',monospace;
+  font-size:.62rem; outline:none; width:36px; text-align:center;
+  margin-left:2px;
 }
 .mode-opt input[type=number]:focus { border-color:#0ff; }
 
 #host-start {
-  margin-top:.9rem !important; padding:.65rem !important;
-  font-size:.72rem !important; letter-spacing:.2em !important;
+  margin-top:.7rem !important; padding:.55rem !important;
+  font-size:.7rem !important; letter-spacing:.2em !important;
 }
 #host-start i { margin-right:6px; }
 
