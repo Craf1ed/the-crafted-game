@@ -13,7 +13,7 @@ export const SPAWNABLE_WEAPONS = ['shotgun','sniper','burst','trishot'];
 export let bullets = [];
 
 export function fireBullets(shooter, def) {
-  const { x, y, angle, color, id: ownerId } = shooter;
+  const { x, y, angle, color, id: ownerId, weaponId } = shooter;
   const count = def.bulletCount || 1;
   const newBullets = [];
   for (let i = 0; i < count; i++) {
@@ -30,6 +30,7 @@ export function fireBullets(shooter, def) {
       life: def.bulletLife, maxLife: def.bulletLife,
       r: def.bulletR, dmg: def.damage,
       color: color||def.color, ownerId,
+      weaponId: weaponId || def.id,
       local: true,
     });
   }

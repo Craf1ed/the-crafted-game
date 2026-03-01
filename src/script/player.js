@@ -6,10 +6,10 @@ const MAX_SPEED    = 230;
 const FRICTION     = 10;
 export const PLAYER_RADIUS = 12;
 
-export const DASH_SPEED    = 820;   // burst velocity
-export const DASH_DURATION = 0.13;  // seconds of dash motion
+export const DASH_SPEED    = 900;   // burst velocity
+export const DASH_DURATION = 0.22;  // longer so you can see the slide
 export const DASH_COOLDOWN = 1.1;   // seconds before next dash
-export const DASH_IFRAME   = 0.18;  // invincibility window during dash
+export const DASH_IFRAME   = 0.22;  // invincibility covers full dash
 
 export const COLOR_PALETTE = [
   '#00ffff','#ff4444','#44ff44','#ff44ff',
@@ -40,6 +40,7 @@ export function createLocalPlayer(id, name, color, spawnPos) {
     dashing: false,
     dashVx: 0,
     dashVy: 0,
+    dashTrail: [],   // [{x,y,age}] position history for smear trail
   };
 }
 
@@ -48,30 +49,40 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
 
   // ── Dash timers ──────────────────────────────
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
-  if (player.dashTimer    > 0) {
+  if (player.dashTimer > 0) {
     player.dashTimer -= dt;
-    // Apply dash velocity with wall collision
+
+    // Record trail position every frame
+    if (!player.dashTrail) player.dashTrail = [];
+    player.dashTrail.push({ x: player.x, y: player.y, age: 0 });
+    if (player.dashTrail.length > 8) player.dashTrail.shift();
+
+    // Age existing trail points
+    for (const p of player.dashTrail) p.age += dt;
+
+    // Ease-out: speed decreases as dash progresses
+    const progress = 1 - Math.max(0, player.dashTimer / DASH_DURATION);
+    const eased = 1 - progress * progress * 0.6; // stays fast, eases at end
     const br = player.radius;
-    const nx = player.x + player.dashVx * dt;
+
+    const nx = player.x + player.dashVx * eased * dt;
     const okX = !isSolid(nx+br,player.y)&&!isSolid(nx-br,player.y)&&
                 !isSolid(nx+br,player.y-br+2)&&!isSolid(nx-br,player.y-br+2)&&
                 !isSolid(nx+br,player.y+br-2)&&!isSolid(nx-br,player.y+br-2);
-    if (okX) player.x = nx; else { player.dashVx *= -0.2; }
+    if (okX) player.x = nx; else { player.dashVx *= -0.1; }
 
-    const ny = player.y + player.dashVy * dt;
+    const ny = player.y + player.dashVy * eased * dt;
     const okY = !isSolid(player.x+br,ny)&&!isSolid(player.x-br,ny)&&
                 !isSolid(player.x+br-2,ny-br)&&!isSolid(player.x-br+2,ny-br)&&
                 !isSolid(player.x+br-2,ny+br)&&!isSolid(player.x-br+2,ny+br);
-    if (okY) player.y = ny; else { player.dashVy *= -0.2; }
+    if (okY) player.y = ny; else { player.dashVy *= -0.1; }
 
     if (player.dashTimer <= 0) {
       player.dashing = false;
-      // Bleed dash momentum into normal velocity
-      player.vx = player.dashVx * 0.35;
-      player.vy = player.dashVy * 0.35;
+      player.vx = player.dashVx * 0.25;
+      player.vy = player.dashVy * 0.25;
     }
 
-    // During dash, only update angle — skip normal movement
     player.angle = Math.atan2((mouseY + camY) - player.y, (mouseX + camX) - player.x);
     if (player.shootCooldown    > 0) player.shootCooldown    -= dt;
     if (player.hitFlash         > 0) player.hitFlash         -= dt;
@@ -81,6 +92,12 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
       if (performance.now() - player.reloadStart >= def.reloadTime) player.reloading = false;
     }
     return;
+  }
+
+  // Fade trail after dash ends
+  if (player.dashTrail?.length) {
+    for (const p of player.dashTrail) p.age += dt;
+    player.dashTrail = player.dashTrail.filter(p => p.age < 0.18);
   }
 
   // ── Normal movement ────────────────────────────
@@ -210,20 +227,27 @@ export function removeRemoteRender(id) { delete remoteRender[id]; }
 
 export function drawLocalPlayer(ctx, player, t, immune = false) {
   if (!player.alive) return;
-  // Draw dash afterimage trail
-  if (player.dashing) {
-    for (let i = 1; i <= 3; i++) {
-      const alpha = (0.22 - i * 0.06);
-      const trailX = player.x - player.dashVx * (i * 0.025);
-      const trailY = player.y - player.dashVy * (i * 0.025);
+
+  // Single-pass smear trail — no shadowBlur, one stroke call
+  const trail = player.dashTrail;
+  if (trail?.length > 2) {
+    const oldest = trail[0];
+    const ageFade = Math.max(0, 1 - oldest.age / 0.22);
+    if (ageFade > 0) {
       ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.beginPath(); ctx.arc(trailX, trailY, player.radius, 0, Math.PI * 2);
-      ctx.strokeStyle = player.color; ctx.lineWidth = 2;
-      ctx.shadowBlur = 12; ctx.shadowColor = player.color; ctx.stroke();
+      ctx.globalAlpha = ageFade * 0.35;
+      ctx.strokeStyle = player.color;
+      ctx.lineWidth = player.radius * 1.8;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(trail[0].x, trail[0].y);
+      for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.stroke();
       ctx.restore();
     }
   }
+
   _drawPlayer(ctx, player.x, player.y, player.angle, player.color,
     player.hitFlash > 0, player.radius, player.name, player.hp, player.maxHp, t, true, immune, player.dashing);
 }
@@ -238,11 +262,10 @@ export function drawRemotePlayer(ctx, p, t, immune = false) {
 function _drawPlayer(ctx, x, y, angle, color, flashing, radius, name, hp, maxHp, t, isLocal, immune, dashing = false) {
   ctx.save();
 
-  // Dash burst ring
+  // Dash burst ring — no shadowBlur
   if (dashing) {
     ctx.beginPath(); ctx.arc(x, y, radius + 6, 0, Math.PI * 2);
-    ctx.strokeStyle = color + 'bb'; ctx.lineWidth = 3;
-    ctx.shadowBlur = 22; ctx.shadowColor = color; ctx.stroke();
+    ctx.strokeStyle = color + 'bb'; ctx.lineWidth = 3; ctx.stroke();
   }
 
   if (immune) {

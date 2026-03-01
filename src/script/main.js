@@ -48,7 +48,7 @@ window.addEventListener('keydown', e => {
   if (tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
   keys[e.key.toLowerCase()] = true;
   if (e.key.toLowerCase()==='r' && localPlayer) { tryReload(localPlayer); if (localPlayer.reloading) playReload(); }
-  if ((e.key==='Shift'||e.key.toLowerCase()==='q') && localPlayer && gamePhase==='playing') {
+  if (e.key===' ' && localPlayer && gamePhase==='playing') {
     if (tryDash(localPlayer, keys)) playDash();
   }
   if (!['f5','f11','f12'].includes(e.key.toLowerCase())) e.preventDefault();
@@ -231,7 +231,14 @@ async function handleJoin(solo) {
           renderLobbyPlayers({ [myId]: localPlayer, ...remotePlayers }, myId);
         }
       },
-      onBulletFired: b => addRemoteBullet(b),
+      onBulletFired: b => {
+        addRemoteBullet(b);
+        // Pan sound based on where the bullet comes from relative to screen center
+        if (localPlayer?.alive) {
+          const pan = Math.max(-1, Math.min(1, (b.x - localPlayer.x) / (canvas.width * 0.6)));
+          playShoot(b.weaponId || 'pistol', pan);
+        }
+      },
 
       onPickupsInit: data => {
         ammoPickups   = {};
@@ -384,9 +391,9 @@ function showHowToPlay(mode, limit) {
   ctrlEl.innerHTML = `
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-arrow-up"></i><i class="fa-solid fa-arrow-down"></i><i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-arrow-right"></i> WASD</span> Move</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-regular fa-circle-dot"></i> MOUSE</span> Aim</div>
-    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE</span> Shoot</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-computer-mouse"></i> CLICK</span> Shoot</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-rotate"></i> R</span> Reload</div>
-    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-bolt"></i> SHIFT / Q</span> Dash (1.1s cooldown, brief invincibility)</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-bolt"></i> SPACE</span> Dash (1.1s cooldown, brief invincibility)</div>
     <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-person-walking"></i> WALK OVER</span> Pick up items</div>
     <div style="margin-top:.8rem;font-size:.6rem;color:#0a8">${respawnNote}</div>
     <div class="pickup-row" style="margin-top:.6rem">
@@ -743,7 +750,7 @@ function update(dt, ts){
   if (gamePhase==='playing' && localPlayer.alive) {
     updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
 
-    if ((mouseDown||keys[' ']) && localPlayer.shootCooldown<=0
+    if (mouseDown && localPlayer.shootCooldown<=0
         && !localPlayer.reloading && localPlayer.ammo>0) handleShoot();
 
     camX=Math.max(0,Math.min(WORLD_W-canvas.width,  localPlayer.x-canvas.width/2));
