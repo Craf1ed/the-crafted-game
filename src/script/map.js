@@ -183,7 +183,7 @@ function _drawPad(ctx, wx, wy, color, t) {
   ctx.restore();
 }
 
-export function drawMinimap(mmCtx, mw, mh, players, myId, camX, camY, canvasW, canvasH, ammoList, weaponList) {
+export function drawMinimap(mmCtx, mw, mh, players, myId, camX, camY, canvasW, canvasH, ammoList, weaponList, healthList) {
   const sx=mw/WORLD_W, sy=mh/WORLD_H;
   mmCtx.fillStyle='rgba(0,0,0,0.93)'; mmCtx.fillRect(0,0,mw,mh);
   for (let ty=0;ty<MAP_H;ty++)
@@ -200,6 +200,7 @@ export function drawMinimap(mmCtx, mw, mh, players, myId, camX, camY, canvasW, c
       mmCtx.fill();
     }
   for (const pk of ammoList){ mmCtx.fillStyle='#ffff00'; mmCtx.fillRect(pk.x*sx-1,pk.y*sy-1,2,2); }
+  for (const hp of (healthList||[])){ mmCtx.fillStyle='#ff3333'; mmCtx.fillRect(hp.x*sx-1,hp.y*sy-1,2,2); }
   for (const wp of weaponList){ mmCtx.fillStyle='#00ff88'; mmCtx.fillRect(wp.x*sx-1.5,wp.y*sy-1.5,3,3); }
   for (const [id,p] of Object.entries(players)){
     if (!p.alive) continue;
