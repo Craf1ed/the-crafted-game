@@ -31,11 +31,11 @@ export function setEmpCallbacks(onDetonate) {
 }
 
 // Place a flashbang at world position (x, y), thrownBy = player id (won't flash self)
-export function placeEmp(x, y, thrownBy) {
+export function placeEmp(x, y, thrownBy, id) {
   if (_empCount <= 0) return false;
   _empCount--;
   _placed.push({
-    id: `fb_${Date.now()}`,
+    id: id || `fb_${Date.now()}`,
     x, y,
     timer: FLASHBANG_COUNTDOWN,
     detonated: false,
@@ -43,6 +43,26 @@ export function placeEmp(x, y, thrownBy) {
     thrownBy: thrownBy || null,
   });
   return true;
+}
+
+// Called by network layer when another player places a flashbang
+export function addRemoteFlashbang(data) {
+  // Don't add duplicates
+  if (_placed.some(fb => fb.id === data.id)) return;
+  // Compensate for network travel time so the timer stays in sync
+  const age = (Date.now() - (data.placedAt || Date.now())) / 1000;
+  const timer = Math.max(0, FLASHBANG_COUNTDOWN - age);
+  if (timer <= 0) return; // already detonated before we received it
+  _placed.push({
+    id: data.id,
+    x: data.x,
+    y: data.y,
+    timer,
+    detonated: false,
+    waves: [],
+    thrownBy: data.thrownBy || null,
+    remote: true, // don't re-broadcast or re-detonate flash effects
+  });
 }
 
 // Called every frame — returns array of detonation events { x, y, thrownBy }
@@ -64,7 +84,7 @@ export function updateEmps(dt) {
       fb.waves.push({ radius: 0,  alpha: 1   });
       fb.waves.push({ radius: 30, alpha: 0.7 });
       fb.waves.push({ radius: 60, alpha: 0.4 });
-      detonations.push({ x: fb.x, y: fb.y, thrownBy: fb.thrownBy });
+      detonations.push({ x: fb.x, y: fb.y, thrownBy: fb.thrownBy, remote: fb.remote || false });
       if (_onDetonate) _onDetonate(fb.x, fb.y);
     }
   }

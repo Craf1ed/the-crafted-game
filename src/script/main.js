@@ -7,7 +7,8 @@ import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
 import {
   empPickups, getEmpCount, addEmp, placeEmp, updateEmps, setEmpCallbacks,
   drawEmpPickups, drawPlacedEmps, checkEmpHit,
-  EMP_DAMAGE, EMP_STUN_SECS, EMP_RADIUS
+  EMP_DAMAGE, EMP_STUN_SECS, EMP_RADIUS,
+  addRemoteFlashbang,
 } from './emp.js';
 import { createLocalPlayer, updateLocalPlayer, tryReload, tryDash,
          equipWeapon, refillAmmo,
@@ -17,7 +18,7 @@ import { createLocalPlayer, updateLocalPlayer, tryReload, tryDash,
 import { initNetwork, joinRoom, checkNameTaken, setCallbacks,
          pushPlayerState, broadcastBullets, broadcastPickupTaken, broadcastPickupRespawn,
          broadcastWeaponDrop, removeWeaponDrop,
-         broadcastKill, broadcastDamage, broadcastFlashbang,
+         broadcastKill, broadcastDamage, broadcastFlashbang, broadcastPlacedFlashbang,
          broadcastRoomMode, broadcastMatchEnd } from './network.js';
 import { hideLobby, showHUD, setLobbyStatus,
          renderColorPicker, renderLobbyPlayers,
@@ -56,9 +57,11 @@ window.addEventListener('keydown', e => {
     if (tryDash(localPlayer, keys)) playDash();
   }
   if (e.key.toLowerCase()==='e' && localPlayer && gamePhase==='playing' && localPlayer.alive) {
-    if (placeEmp(localPlayer.x, localPlayer.y, myId)) {
+    const fbId = `fb_placed_${Date.now()}_${myId}`;
+    if (placeEmp(localPlayer.x, localPlayer.y, myId, fbId)) {
       updateEmpHUD(getEmpCount());
       playEmpPlace();
+      if (gameMode !== 'solo') broadcastPlacedFlashbang(fbId, localPlayer.x, localPlayer.y, myId);
     }
   }
   if (!['f5','f11','f12'].includes(e.key.toLowerCase())) e.preventDefault();
@@ -315,6 +318,7 @@ async function handleJoin(solo) {
       onKillRegistered:  handleRemoteKill,
       onDamageReceived:  handleRemoteDamage,
       onFlashbangReceived: handleRemoteFlashbang,
+      onPlacedFlashbang: (data) => addRemoteFlashbang(data),
       onRoomModeChanged: (meta) => {
         console.log('[MAIN] onRoomModeChanged fired, gamePhase:', gamePhase, 'meta:', meta);
         if (!meta.startedAt) return;
@@ -1025,8 +1029,8 @@ function update(dt, ts){
     for (const det of detonations) {
       playEmpDetonate();
 
-      // Flash remote players in radius (multiplayer) — thrower is excluded server-side by thrownBy check
-      if (gameMode !== 'solo') {
+      // Flash remote players in radius — only the thrower's client broadcasts this
+      if (gameMode !== 'solo' && !det.remote) {
         for (const [rid, rp] of Object.entries(remotePlayers)) {
           if (!rp.alive) continue;
           if (Math.hypot(rp.x - det.x, rp.y - det.y) <= EMP_RADIUS) {
@@ -1035,16 +1039,20 @@ function update(dt, ts){
         }
       }
 
-      // Stun local player only if they didn't throw it
-      const localInRadius = localPlayer?.alive && Math.hypot(localPlayer.x-det.x, localPlayer.y-det.y) <= EMP_RADIUS;
-      const localThrewIt  = det.thrownBy === myId;
-      if (localInRadius && !localThrewIt) {
-        localPlayer.stunTimer = EMP_STUN_SECS;
-        localPlayer.hitFlash  = 0.4;
-        triggerFlashbangScreen();
-        playFlash();
+      // Stun local player only if they didn't throw it, and only for locally-originated detonations
+      // (remote detonations already sent a broadcastFlashbang to us if we were in range)
+      if (!det.remote) {
+        const localInRadius = localPlayer?.alive && Math.hypot(localPlayer.x-det.x, localPlayer.y-det.y) <= EMP_RADIUS;
+        const localThrewIt  = det.thrownBy === myId;
+        if (localInRadius && !localThrewIt) {
+          localPlayer.stunTimer = EMP_STUN_SECS;
+          localPlayer.hitFlash  = 0.4;
+          triggerFlashbangScreen();
+          playFlash();
+        }
       }
-      // Stun bots (bots never threw it)
+
+      // Stun bots (solo only)
       if (gameMode === 'solo') {
         for (const bot of getBots()) {
           if (!bot.alive) continue;

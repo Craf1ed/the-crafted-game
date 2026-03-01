@@ -26,6 +26,7 @@ const cb = {
   onRoomModeChanged:    () => {},
   onMatchEnded:         () => {},
   onFlashbangReceived:  () => {},
+  onPlacedFlashbang:    () => {},
 };
 
 export function setCallbacks(cbs) {
@@ -151,6 +152,13 @@ export async function joinRoom(playerData, pickupPositions) {
     for (const [, ev] of Object.entries(snap.val())) cb.onFlashbangReceived(ev);
   });
 
+  fbOnValue(r(`rooms/${roomCode}/placedFlashbangs`), snap => {
+    if (!snap.exists()) return;
+    for (const [, fb] of Object.entries(snap.val())) {
+      if (fb.thrownBy !== myId) cb.onPlacedFlashbang(fb);
+    }
+  });
+
   return iAmHost;
 }
 
@@ -253,5 +261,18 @@ export function broadcastFlashbang(victimId, throwerId) {
     setTimeout(() => {
       try { fbRemove(r(`rooms/${roomCode}/flash/${victimId}/${evId}`)); } catch(e) {}
     }, 6000);
+  } catch(e) {}
+}
+
+// Broadcast a placed flashbang device so other clients can see the countdown
+export function broadcastPlacedFlashbang(id, x, y, thrownBy) {
+  try {
+    fbSet(r(`rooms/${roomCode}/placedFlashbangs/${id}`), {
+      id, x, y, thrownBy, placedAt: Date.now(),
+    });
+    // Auto-clean after countdown + a small buffer
+    setTimeout(() => {
+      try { fbRemove(r(`rooms/${roomCode}/placedFlashbangs/${id}`)); } catch(e) {}
+    }, 3000 + 4000);
   } catch(e) {}
 }
