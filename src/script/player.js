@@ -40,6 +40,15 @@ export function createLocalPlayer(id, name, color, spawnPos) {
 export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) {
   if (!player.alive) return;
 
+  const moving = keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown']
+              || keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'];
+
+  // Friction FIRST so wall-zeroed velocity doesn't double-damp on same frame
+  const fricFactor = moving ? FRICTION : FRICTION * 2;
+  const fric = Math.pow(1 - Math.min(fricFactor * dt, 0.99), 1);
+  player.vx *= fric;
+  player.vy *= fric;
+
   let ax = 0, ay = 0;
   if (keys['w'] || keys['arrowup'])    ay -= ACCEL;
   if (keys['s'] || keys['arrowdown'])  ay += ACCEL;
@@ -56,13 +65,9 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   const spd = Math.hypot(player.vx, player.vy);
   if (spd > MAX_SPEED) { player.vx = player.vx/spd * MAX_SPEED; player.vy = player.vy/spd * MAX_SPEED; }
 
-  player.vx *= Math.pow(1 - Math.min(FRICTION * dt, 0.99), 1);
-  player.vy *= Math.pow(1 - Math.min(FRICTION * dt, 0.99), 1);
-
   const r = player.radius;
 
-  // ── Wall-sliding collision (key fix: try each axis independently, don't zero velocity on slide) ──
-  // Move X
+  // Move X — slide along wall (only zero the blocked axis)
   const nx = player.x + player.vx * dt;
   const clearX = !isSolid(nx + r, player.y)
               && !isSolid(nx - r, player.y)
@@ -73,7 +78,6 @@ export function updateLocalPlayer(player, keys, mouseX, mouseY, camX, camY, dt) 
   if (clearX) {
     player.x = nx;
   } else {
-    // Slide: zero only x velocity, keep y
     player.vx = 0;
   }
 

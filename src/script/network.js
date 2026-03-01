@@ -66,16 +66,23 @@ export async function joinRoom(playerData, pickupPositions) {
 
   // Initialise pickup layout only if not already set (first joiner wins)
   const pickupSnap = await fbGet(r(`rooms/${roomCode}/pickups`));
+  // Always write pickups — merge so existing ammo/weapon slots survive
+  // but health packs always get (re)written in case they were missing from older rooms
+  const existingPickups = pickupSnap.exists() ? pickupSnap.val() : {};
+  const pickupData = { ...existingPickups };
+  // Only write ammo/weapons if brand new room
   if (!pickupSnap.exists()) {
-    const pickupData = {};
     for (const [i, pos] of pickupPositions.ammo.entries())
       pickupData[`ammo_${i}`] = { ...pos, type: 'ammo', pulse: Math.random()*Math.PI*2 };
     for (const [i, pos] of pickupPositions.weapons.entries())
       pickupData[`wp_${i}`] = { ...pos, type: 'weapon', weaponId: pos.weaponId, pulse: Math.random()*Math.PI*2 };
-    for (const [i, pos] of (pickupPositions.health || []).entries())
-      pickupData[`hp_${i}`] = { ...pos, type: 'health', pulse: Math.random()*Math.PI*2 };
-    await fbSet(r(`rooms/${roomCode}/pickups`), pickupData);
   }
+  // Always write health packs (fills gap if room predates health pickups)
+  for (const [i, pos] of (pickupPositions.health || []).entries()) {
+    if (!pickupData[`hp_${i}`])
+      pickupData[`hp_${i}`] = { ...pos, type: 'health', pulse: Math.random()*Math.PI*2 };
+  }
+  await fbSet(r(`rooms/${roomCode}/pickups`), pickupData);
 
   // Set room to playing if not set
   const roomSnap = await fbGet(r(`rooms/${roomCode}`));

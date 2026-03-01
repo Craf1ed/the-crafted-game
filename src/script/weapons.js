@@ -132,15 +132,15 @@ export function drawHealthPickups(ctx, t, healthPickups) {
   for (const pk of healthPickups) {
     const pulse = 1 + 0.18 * Math.sin(t*3 + (pk.pulse||0));
     ctx.save();
+    // Identical to ammo but red
     ctx.beginPath(); ctx.arc(pk.x, pk.y, 9*pulse, 0, Math.PI*2);
-    ctx.fillStyle="rgba(255,60,60,0.10)"; ctx.fill();
+    ctx.fillStyle='rgba(255,60,60,0.08)'; ctx.fill();
     ctx.beginPath(); ctx.arc(pk.x, pk.y, 8, 0, Math.PI*2);
-    ctx.fillStyle="rgba(0,0,0,0.8)"; ctx.fill();
-    ctx.strokeStyle="#ff3333"; ctx.lineWidth=1.5;
-    ctx.shadowBlur=12; ctx.shadowColor="#ff3333"; ctx.stroke();
-    ctx.shadowBlur=8; ctx.fillStyle="#ff3333";
-    ctx.font="bold 9px serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
-    ctx.fillText("♥", pk.x, pk.y + 0.5);
+    ctx.fillStyle='rgba(0,0,0,0.8)'; ctx.fill();
+    ctx.strokeStyle='#ff3333'; ctx.lineWidth=1.5;
+    ctx.shadowBlur=12; ctx.shadowColor='#ff3333'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(pk.x, pk.y, 2.5, 0, Math.PI*2);
+    ctx.fillStyle='#ff3333'; ctx.shadowBlur=8; ctx.fill();
     ctx.restore();
   }
 }
