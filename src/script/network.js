@@ -25,6 +25,8 @@ export let onWeaponDropped    = () => {};
 export let onWeaponDropRemoved= () => {};
 export let onKillRegistered   = () => {};
 export let onDamageReceived   = () => {};
+export let onRoomModeChanged  = () => {};
+export let onMatchEnded       = () => {};
 
 export function setCallbacks(cbs) {
   if (cbs.onPlayerUpdated)     onPlayerUpdated     = cbs.onPlayerUpdated;
@@ -36,6 +38,8 @@ export function setCallbacks(cbs) {
   if (cbs.onWeaponDropRemoved) onWeaponDropRemoved = cbs.onWeaponDropRemoved;
   if (cbs.onKillRegistered)    onKillRegistered    = cbs.onKillRegistered;
   if (cbs.onDamageReceived)    onDamageReceived    = cbs.onDamageReceived;
+  if (cbs.onRoomModeChanged)   onRoomModeChanged   = cbs.onRoomModeChanged;
+  if (cbs.onMatchEnded)        onMatchEnded        = cbs.onMatchEnded;
 }
 
 export async function initNetwork(code, id) {
@@ -84,10 +88,16 @@ export async function joinRoom(playerData, pickupPositions) {
   }
   await fbSet(r(`rooms/${roomCode}/pickups`), pickupData);
 
-  // Set room to playing if not set
+  // Determine host: first to join (no existing players)
+  const existingPlayersSnap = await fbGet(r(`rooms/${roomCode}/players`));
+  const existingPlayerCount = existingPlayersSnap.exists()
+    ? Object.keys(existingPlayersSnap.val()).filter(k => k !== myId).length
+    : 0;
+  const iAmHost = existingPlayerCount === 0;
+
   const roomSnap = await fbGet(r(`rooms/${roomCode}`));
   if (!roomSnap.exists() || !roomSnap.val().state) {
-    await fbUpdate(r(`rooms/${roomCode}`), { state: 'playing', createdAt: Date.now() });
+    await fbUpdate(r(`rooms/${roomCode}`), { state: 'lobby', createdAt: Date.now() });
   }
 
   let knownPlayers = new Set();
@@ -135,11 +145,21 @@ export async function joinRoom(playerData, pickupPositions) {
     for (const [, k] of Object.entries(snap.val())) onKillRegistered(k);
   });
 
+  // Room meta (game mode, match end)
+  fbOnValue(r(`rooms/${roomCode}/meta`), snap => {
+    if (!snap.exists()) return;
+    const d = snap.val();
+    if (d.mode) onRoomModeChanged(d);
+    if (d.ended) onMatchEnded(d);
+  });
+
   // Damage inbox
   fbOnValue(r(`rooms/${roomCode}/damage/${myId}`), snap => {
     if (!snap.exists()) return;
     for (const [, ev] of Object.entries(snap.val())) onDamageReceived(ev);
   });
+
+  return iAmHost;
 }
 
 // ── Push player state (20 Hz) ─────────────────
@@ -211,6 +231,15 @@ export function broadcastKill(killerId, killerName, victimId, victimName) {
     fbSet(r(`rooms/${roomCode}/kills/${kid}`), { killerId, killerName, victimId, victimName, ts: Date.now() });
     setTimeout(() => { try { fbRemove(r(`rooms/${roomCode}/kills/${kid}`)); } catch(e){} }, 8000);
   } catch(e) {}
+}
+
+// ── Room mode (host only) ─────────────────────
+export function broadcastRoomMode(mode, killLimit) {
+  try { fbUpdate(r(`rooms/${roomCode}/meta`), { mode, killLimit: killLimit||0, ended:false, winner:null }); } catch(e) {}
+}
+
+export function broadcastMatchEnd(winnerName, winnerColor, reason) {
+  try { fbUpdate(r(`rooms/${roomCode}/meta`), { ended:true, winner: winnerName, winnerColor, reason, endedAt: Date.now() }); } catch(e) {}
 }
 
 // ── Leave ────────────────────────────────────

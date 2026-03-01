@@ -151,35 +151,61 @@ export function drawTeleporters(ctx, t) {
   for (const tp of TELEPORTERS){
     _drawPad(ctx,tp.a.tx*TILE+TILE/2,tp.a.ty*TILE+TILE/2,tp.color,t);
     _drawPad(ctx,tp.b.tx*TILE+TILE/2,tp.b.ty*TILE+TILE/2,tp.color,t);
-    const ax=tp.a.tx*TILE+TILE/2, ay=tp.a.ty*TILE+TILE/2;
-    const bx=tp.b.tx*TILE+TILE/2, by=tp.b.ty*TILE+TILE/2;
-    ctx.save();
-    ctx.strokeStyle=tp.color+'18'; ctx.lineWidth=1; ctx.setLineDash([6,10]);
-    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
-    ctx.setLineDash([]); ctx.restore();
   }
 }
 
 function _drawPad(ctx, wx, wy, color, t) {
-  const r=18, spin=t*1.8, pulse=0.85+0.15*Math.sin(t*3);
+  const R=20;
+  const pulse=0.88+0.12*Math.sin(t*2.5);
+  const scan=(t*60)%((R*2)+8)-R-4; // scan line sweeping top→bottom
+
   ctx.save();
-  ctx.beginPath(); ctx.arc(wx,wy,r*pulse+4,0,Math.PI*2);
-  ctx.strokeStyle=color+'30'; ctx.lineWidth=3; ctx.stroke();
-  ctx.beginPath(); ctx.arc(wx,wy,r*pulse,0,Math.PI*2);
-  const g=ctx.createRadialGradient(wx,wy,0,wx,wy,r);
-  g.addColorStop(0,color+'aa'); g.addColorStop(1,color+'00');
-  ctx.fillStyle=g; ctx.fill();
-  ctx.strokeStyle=color; ctx.lineWidth=2;
-  ctx.shadowBlur=20; ctx.shadowColor=color; ctx.stroke(); ctx.shadowBlur=0;
-  ctx.translate(wx,wy); ctx.rotate(spin);
-  ctx.strokeStyle=color+'cc'; ctx.lineWidth=1.5;
-  for (let i=0;i<3;i++){
-    const a=(i/3)*Math.PI*2;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(a)*5,Math.sin(a)*5);
-    ctx.lineTo(Math.cos(a)*14,Math.sin(a)*14);
-    ctx.stroke();
+
+  // Hexagonal floor tile
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a=i/6*Math.PI*2 - Math.PI/6;
+    i===0 ? ctx.moveTo(wx+Math.cos(a)*R, wy+Math.sin(a)*R)
+           : ctx.lineTo(wx+Math.cos(a)*R, wy+Math.sin(a)*R);
   }
+  ctx.closePath();
+  ctx.fillStyle=color+'18'; ctx.fill();
+  ctx.strokeStyle=color+'55'; ctx.lineWidth=1.5;
+  ctx.shadowBlur=10; ctx.shadowColor=color; ctx.stroke();
+
+  // Inner hex, smaller
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a=i/6*Math.PI*2 - Math.PI/6;
+    i===0 ? ctx.moveTo(wx+Math.cos(a)*(R*0.55), wy+Math.sin(a)*(R*0.55))
+           : ctx.lineTo(wx+Math.cos(a)*(R*0.55), wy+Math.sin(a)*(R*0.55));
+  }
+  ctx.closePath();
+  ctx.strokeStyle=color+'88'; ctx.lineWidth=1; ctx.shadowBlur=6; ctx.stroke();
+
+  // Radial gradient pool
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a=i/6*Math.PI*2 - Math.PI/6;
+    i===0 ? ctx.moveTo(wx+Math.cos(a)*R, wy+Math.sin(a)*R)
+           : ctx.lineTo(wx+Math.cos(a)*R, wy+Math.sin(a)*R);
+  }
+  ctx.closePath();
+  ctx.save();
+  ctx.clip();
+  const g=ctx.createRadialGradient(wx,wy,0,wx,wy,R);
+  g.addColorStop(0,color+'44'); g.addColorStop(0.6,color+'11'); g.addColorStop(1,color+'00');
+  ctx.fillStyle=g; ctx.fill();
+
+  // Animated scan line inside hex
+  ctx.fillStyle=color+'28';
+  ctx.fillRect(wx-R, wy+scan, R*2, 3);
+  ctx.restore();
+
+  // Pulsing centre dot
+  ctx.beginPath(); ctx.arc(wx,wy,4*pulse,0,Math.PI*2);
+  ctx.fillStyle=color+'cc'; ctx.shadowBlur=14; ctx.shadowColor=color; ctx.fill();
+
   ctx.restore();
 }
 

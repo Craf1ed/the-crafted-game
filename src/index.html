@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Crafted Game</title>
 <link rel="stylesheet" href="style/styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
 
@@ -22,18 +23,39 @@
     <label class="color-label">CHOOSE COLOR</label>
     <div id="color-picker"></div>
 
-    <button class="btn" id="join-btn">JOIN / CREATE ROOM</button>
-    <button class="btn secondary" id="solo-btn">SOLO (OFFLINE)</button>
-    <button class="btn global" id="global-btn">⚡ JOIN GLOBAL ARCADE</button>
+    <button class="btn" id="join-btn"><i class="fa-solid fa-door-open"></i> JOIN / CREATE ROOM</button>
+    <button class="btn secondary" id="solo-btn"><i class="fa-solid fa-user"></i> SOLO (OFFLINE)</button>
+    <button class="btn global" id="global-btn"><i class="fa-solid fa-bolt"></i> JOIN GLOBAL ARCADE</button>
 
     <div id="status-msg"></div>
 
     <div id="lobby-waiting">
       <div class="lw-title">PLAYERS IN ROOM</div>
       <div id="lobby-players"></div>
+
+      <!-- Host-only game mode picker -->
+      <div id="host-controls">
+        <div class="lw-title" style="margin-top:1rem">GAME MODE</div>
+        <div id="mode-picker">
+          <label class="mode-opt">
+            <input type="radio" name="gamemode" value="endless" checked>
+            <span><i class="fa-solid fa-infinity"></i> ENDLESS</span>
+          </label>
+          <label class="mode-opt">
+            <input type="radio" name="gamemode" value="lms">
+            <span><i class="fa-solid fa-skull-crossbones"></i> LAST MAN STANDING</span>
+          </label>
+          <label class="mode-opt">
+            <input type="radio" name="gamemode" value="killlimit">
+            <span><i class="fa-solid fa-trophy"></i> KILL LIMIT</span>
+            <input type="number" id="kill-limit-val" value="10" min="1" max="99" style="width:44px;margin-left:8px">
+          </label>
+        </div>
+        <button class="btn" id="host-start" style="margin-top:.8rem"><i class="fa-solid fa-play"></i> START MATCH</button>
+      </div>
     </div>
   </div>
-  <div class="lobby-info">No host needed · Join anytime · Respawn in 5s after death</div>
+  <div class="lobby-info"><i class="fa-solid fa-circle-info"></i> Create a room to set the game mode &nbsp;·&nbsp; Join any existing room to play</div>
 </div>
 
 <!-- ══ CANVAS ══ -->
@@ -47,25 +69,25 @@
 <div id="hud">
   <div class="hud-row">
     <div class="hud-item">
-      <span class="hud-label">HP</span>
+      <span class="hud-label"><i class="fa-solid fa-heart"></i></span>
       <div id="health-bar"><div id="health-fill" style="width:100%"></div></div>
       <span class="hud-val" id="hp-val">100</span>
     </div>
     <div class="hud-item">
-      <span class="hud-label">GUN</span>
+      <span class="hud-label"><i class="fa-solid fa-gun"></i></span>
       <span id="weapon-name" style="color:#ffff44">PISTOL</span>
     </div>
   </div>
   <div class="hud-row">
     <div class="hud-item">
-      <span class="hud-label">AMMO</span>
+      <span class="hud-label"><i class="fa-solid fa-circle-dot"></i></span>
       <div id="ammo-display"></div>
     </div>
   </div>
 </div>
 
 <!-- ══ RELOAD ══ -->
-<div id="reload-indicator">⟳ RELOADING</div>
+<div id="reload-indicator"><i class="fa-solid fa-rotate"></i> RELOADING</div>
 
 <!-- ══ LEADERBOARD ══ -->
 <div id="leaderboard"></div>
@@ -75,22 +97,31 @@
 
 <!-- ══ CONTROLS HINT ══ -->
 <div id="controls-hint">
-  WASD — MOVE &nbsp;·&nbsp; MOUSE — AIM<br>
-  CLICK / SPACE — SHOOT &nbsp;·&nbsp; R — RELOAD
+  <i class="fa-solid fa-arrow-up-right-and-arrow-down-left-from-center"></i> WASD — MOVE &nbsp;·&nbsp; <i class="fa-regular fa-circle-dot"></i> MOUSE — AIM<br>
+  <i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE — SHOOT &nbsp;·&nbsp; <i class="fa-solid fa-r"></i> — RELOAD
 </div>
 
 <!-- ══ OVERLAYS ══ -->
 <div id="alert-flash"></div>
 
 <div id="eliminated-overlay">
-  <h2>ELIMINATED</h2>
+  <h2><i class="fa-solid fa-skull"></i> ELIMINATED</h2>
   <p>KILLED BY <span id="elim-killer">???</span></p>
-  <!-- #respawn-count injected by JS -->
 </div>
 
 <div id="spectator-label">
-  SPECTATING<br>
+  <i class="fa-solid fa-eye"></i> SPECTATING<br>
   <span style="font-size:.6rem;color:rgba(0,255,255,.2)">YOU HAVE BEEN ELIMINATED</span>
+</div>
+
+<!-- ══ HOW TO PLAY POPUP ══ -->
+<div id="howtoplay-overlay">
+  <div id="howtoplay-box">
+    <div id="howtoplay-title">HOW TO PLAY</div>
+    <div id="howtoplay-mode"></div>
+    <div id="howtoplay-controls"></div>
+    <button id="howtoplay-close"><i class="fa-solid fa-play"></i> LET'S GO</button>
+  </div>
 </div>
 
 <div id="game-msg"></div>

@@ -16,7 +16,8 @@ import { createLocalPlayer, updateLocalPlayer, tryReload,
 import { initNetwork, joinRoom, checkNameTaken, setCallbacks,
          pushPlayerState, broadcastBullets, broadcastPickupTaken, broadcastPickupRespawn,
          broadcastWeaponDrop, removeWeaponDrop,
-         broadcastKill, broadcastDamage } from './network.js';
+         broadcastKill, broadcastDamage,
+         broadcastRoomMode, broadcastMatchEnd } from './network.js';
 import { hideLobby, showHUD, setLobbyStatus,
          renderColorPicker, renderLobbyPlayers,
          updateHealthHUD, updateAmmoHUD, updateWeaponHUD,
@@ -72,6 +73,12 @@ const RESPAWN_SECS = 5;
 let respawnTimer   = 0;
 let respawnHandle  = null;
 
+// Game mode state
+let gameMode     = 'endless'; // 'endless' | 'lms' | 'killlimit'
+let killLimit    = 10;
+let isHost       = false;
+let matchEnded   = false;
+
 // ── Color picker ──────────────────────────────
 function onColorPick(c) { myColor=c; renderColorPicker(COLOR_PALETTE, myColor, onColorPick); }
 renderColorPicker(COLOR_PALETTE, myColor, onColorPick);
@@ -88,6 +95,13 @@ document.getElementById('player-name').addEventListener('keydown', e=>{
 });
 document.getElementById('room-code').addEventListener('keydown', e=>{
   if (e.key==='Enter') handleJoin(false);
+});
+document.getElementById('host-start')?.addEventListener('click', () => {
+  const modeEl = document.querySelector('input[name="gamemode"]:checked');
+  gameMode  = modeEl?.value || 'endless';
+  killLimit = parseInt(document.getElementById('kill-limit-val')?.value) || 10;
+  broadcastRoomMode(gameMode, killLimit);
+  startMatch();
 });
 
 // ── Join ──────────────────────────────────────
@@ -115,8 +129,10 @@ async function handleJoin(solo) {
     ammoPos.forEach((p,i)=>   { ammoPickups[`ammo_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
     weaponPos.forEach((p,i)=> { weaponPickups[`wp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
     healthPos.forEach((p,i)=> { healthPickups[`hp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
-    gamePhase='playing';
+    gameMode  = 'endless';
+    gamePhase = 'playing';
     hideLobby(); showHUD();
+    showHowToPlay('endless', 0);
     updateWeaponHUD('pistol');
     updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS.pistol.maxAmmo, false);
     updateHealthHUD(100,100);
@@ -166,12 +182,45 @@ async function handleJoin(solo) {
 
       onKillRegistered:  handleRemoteKill,
       onDamageReceived:  handleRemoteDamage,
+      onRoomModeChanged: (meta) => {
+        gameMode  = meta.mode  || 'endless';
+        killLimit = meta.killLimit || 10;
+        // Non-host enters game when mode is broadcast
+        if (gamePhase !== 'playing') {
+          gamePhase = 'playing';
+          hideLobby(); showHUD();
+          showHowToPlay(gameMode, killLimit);
+          updateWeaponHUD(localPlayer.weaponId);
+          updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
+          updateHealthHUD(100,100);
+        }
+      },
+      onMatchEnded: (meta) => {
+        if (matchEnded) return;
+        matchEnded = true;
+        gamePhase = 'ended';
+        const el = document.getElementById('game-msg');
+        if (!el) return;
+        el.style.display='flex';
+        el.style.color = meta.winnerColor || '#0ff';
+        el.style.textShadow = `0 0 30px ${meta.winnerColor||'#0ff'}`;
+        el.innerHTML = `<div style="text-align:center">
+          <div style="font-size:1rem;letter-spacing:.3em;color:#0a8;margin-bottom:.5rem">
+            <i class="fa-solid fa-trophy"></i> ${meta.reason||'WINNER'}
+          </div>
+          <div style="color:${meta.winnerColor||'#0ff'}">${esc(meta.winner||'???')}</div>
+          <div style="font-size:.7rem;margin-top:2rem;color:#444;letter-spacing:.2em;cursor:pointer"
+               onclick="location.reload()">
+            <i class="fa-solid fa-rotate-left"></i> CLICK TO RETURN TO LOBBY
+          </div>
+        </div>`;
+      },
     });
 
     const taken = await checkNameTaken(room, name);
     if (taken) { setLobbyStatus('Name taken in this room!','#f44'); return; }
 
-    await joinRoom({
+    const hostResult = await joinRoom({
       name, color: myColor, id: myId,
       x: Math.round(localPlayer.x), y: Math.round(localPlayer.y),
       angle: 0, hp: 100, maxHp: 100, alive: true,
@@ -179,15 +228,15 @@ async function handleJoin(solo) {
       joinedAt: Date.now(),
     }, { ammo: ammoPos, weapons: weaponPos, health: healthPos });
 
-    gamePhase='playing';
-    hideLobby(); showHUD();
-    updateWeaponHUD(localPlayer.weaponId);
-    updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
-    updateHealthHUD(100,100);
+    isHost = hostResult;
 
-    // Show player list briefly
     document.getElementById('lobby-waiting').style.display='block';
-    setLobbyStatus('','#0a8');
+    if (isHost) {
+      document.getElementById('host-controls').style.display='block';
+      setLobbyStatus('⭐ You are HOST — choose game mode and start','#ff0');
+    } else {
+      setLobbyStatus('Waiting for host to start the match...','#0a8');
+    }
     startGameLoop();
 
   } catch(err) {
@@ -206,6 +255,54 @@ function roomHash(str) {
   return h;
 }
 
+// ── Start match (called by host) ──────────────
+function startMatch() {
+  gamePhase='playing';
+  hideLobby(); showHUD();
+  showHowToPlay(gameMode, killLimit);
+  updateWeaponHUD(localPlayer.weaponId);
+  updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, false);
+  updateHealthHUD(100,100);
+}
+
+// ── How To Play popup ─────────────────────────
+function showHowToPlay(mode, limit) {
+  const overlay = document.getElementById('howtoplay-overlay');
+  const modeEl  = document.getElementById('howtoplay-mode');
+  const ctrlEl  = document.getElementById('howtoplay-controls');
+  if (!overlay) return;
+
+  const modeText = {
+    endless:   '<i class="fa-solid fa-infinity"></i> ENDLESS — Respawn every 5s. No end. Chase that kill count.',
+    lms:       '<i class="fa-solid fa-skull-crossbones"></i> LAST MAN STANDING — One life only. Last player alive wins.',
+    killlimit: `<i class="fa-solid fa-trophy"></i> KILL LIMIT — First to <strong>${limit}</strong> kills wins. Respawn in 5s.`,
+  };
+  modeEl.innerHTML = modeText[mode] || modeText.endless;
+
+  const respawnNote = (mode === 'lms')
+    ? '<span style="color:#f44"><i class="fa-solid fa-triangle-exclamation"></i> NO RESPAWN — one life!</span>'
+    : '<i class="fa-solid fa-rotate"></i> Respawn in 5s after death';
+
+  ctrlEl.innerHTML = `
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-arrow-up"></i><i class="fa-solid fa-arrow-down"></i><i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-arrow-right"></i> WASD</span> Move</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-regular fa-circle-dot"></i> MOUSE</span> Aim</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-computer-mouse"></i> CLICK / SPACE</span> Shoot</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-rotate"></i> R</span> Reload (uses ammo from pickups)</div>
+    <div class="ctrl-row"><span class="ctrl-key"><i class="fa-solid fa-person-walking"></i> WALK OVER</span> Pick up items</div>
+    <div style="margin-top:.8rem;font-size:.6rem;color:#0a8">${respawnNote}</div>
+    <div class="pickup-row" style="margin-top:.6rem">
+      <div class="pickup-item"><span style="color:#ffff00;font-size:10px">●</span> Ammo +10</div>
+      <div class="pickup-item"><span style="color:#ff3333;font-size:10px">●</span> Health +30</div>
+      <div class="pickup-item"><span style="color:#00ff88;font-size:10px">●</span> Weapons</div>
+      <div class="pickup-item"><span style="color:#ff44ff;font-size:10px">⬡</span> Teleporters</div>
+    </div>`;
+
+  overlay.style.display = 'flex';
+  document.getElementById('howtoplay-close').onclick = () => {
+    overlay.style.display = 'none';
+  };
+}
+
 // ── Death & Respawn ───────────────────────────
 function handleDeath(killerName, killerColor) {
   localPlayer.hp    = 0;
@@ -222,7 +319,13 @@ function handleDeath(killerName, killerColor) {
     if (respawnTimer <= 0) {
       clearInterval(respawnHandle);
       respawnHandle = null;
-      doRespawn();
+      if (gameMode === 'lms') {
+        // No respawn in LMS — stay dead and spectate
+        const el = document.getElementById('respawn-count');
+        if (el) el.textContent = 'YOU ARE ELIMINATED — SPECTATING';
+      } else {
+        doRespawn();
+      }
     }
   }, 1000);
 }
@@ -487,6 +590,29 @@ function update(dt, ts){
 
   updateBullets(dt);
   tickKillFeed();
+
+  // Win condition (host only)
+  if (isHost && gamePhase==='playing' && !matchEnded) checkWinCondition();
+}
+
+function checkWinCondition() {
+  const allPlayers = { [myId]: localPlayer, ...remotePlayers };
+  if (gameMode === 'lms') {
+    const alive = Object.values(allPlayers).filter(p => p.alive);
+    if (alive.length === 1 && Object.keys(allPlayers).length > 1) {
+      const w = alive[0];
+      matchEnded = true;
+      broadcastMatchEnd(w.name, w.color, 'LAST STANDING');
+    }
+  } else if (gameMode === 'killlimit') {
+    for (const p of Object.values(allPlayers)) {
+      if ((p.kills||0) >= killLimit) {
+        matchEnded = true;
+        broadcastMatchEnd(p.name, p.color||'#0ff', `REACHED ${killLimit} KILLS`);
+        break;
+      }
+    }
+  }
 }
 
 // ── Render ────────────────────────────────────
@@ -535,4 +661,9 @@ function draw(ts){
 
   if (localPlayer && gamePhase!=='lobby')
     renderLeaderboard({[myId]:localPlayer,...remotePlayers});
+}
+
+// ── Utility ───────────────────────────────────
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
