@@ -1,4 +1,4 @@
-const FIREBASE_CONFIG = {
+const FIREBASE_CONFIG = { // its frontend and its a game so idgaf about hiding these
   apiKey: 'AIzaSyCqD4U27qjvNfBYp7s92w7razdFkMyuV3g',
   authDomain: 'crafted-game.firebaseapp.com',
   databaseURL: 'https://crafted-game-default-rtdb.firebaseio.com',
