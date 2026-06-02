@@ -320,7 +320,15 @@ function tryReload(player) {
 function fireBullets(player) {
   const def = WEAPON_DEFS[player.weaponId];
   if (player.ammo <= 0) return;
-  if (def.isLaser) return null;
+  
+  // Handle laser gun
+  if (def.isLaser) {
+    if (!player.laserActive) {
+      player.laserActive = true;
+      player.laserStartTime = Date.now();
+    }
+    return null;
+  }
   
   const count = def.bulletCount || 1;
   const newBullets = [];
@@ -488,16 +496,117 @@ function gameLoop() {
       
       // Handle shooting
       if (player.inputs.mouseDown && player.shootCooldown <= 0 && !player.reloading) {
-        const newBullets = fireBullets(player);
-        if (newBullets) {
-          room.bullets.push(...newBullets);
-          broadcastToRoom(code, { type: 'bulletsFired', bullets: newBullets });
+        const def = WEAPON_DEFS[player.weaponId];
+        
+        // Handle laser gun
+        if (def.isLaser) {
+          if (!player.laserActive) {
+            player.laserActive = true;
+            player.laserStartTime = Date.now();
+            broadcastToRoom(code, { type: 'laserActivated', id: player.id, angle: player.angle, x: player.x, y: player.y });
+          }
+        } else {
+          const newBullets = fireBullets(player);
+          if (newBullets) {
+            room.bullets.push(...newBullets);
+            broadcastToRoom(code, { type: 'bulletsFired', bullets: newBullets });
+          }
         }
+      } else if (!player.inputs.mouseDown && player.laserActive) {
+        player.laserActive = false;
+        broadcastToRoom(code, { type: 'laserDeactivated', id: player.id });
       }
     }
     
     // Update pickups
     updatePickups(room, dt);
+    
+    // Handle teleporters
+    for (const [pid, player] of Object.entries(room.players)) {
+      if (!player.alive) continue;
+      
+      const tx = Math.floor(player.x / TILE);
+      const ty = Math.floor(player.y / TILE);
+      
+      for (const tp of TELEPORTERS) {
+        if (tx === tp.a.tx && ty === tp.a.ty) {
+          player.x = tp.b.tx * TILE + TILE / 2;
+          player.y = tp.b.ty * TILE + TILE / 2;
+          broadcastToRoom(code, { type: 'playerTeleported', id: pid, x: player.x, y: player.y });
+          break;
+        } else if (tx === tp.b.tx && ty === tp.b.ty) {
+          player.x = tp.a.tx * TILE + TILE / 2;
+          player.y = tp.a.ty * TILE + TILE / 2;
+          broadcastToRoom(code, { type: 'playerTeleported', id: pid, x: player.x, y: player.y });
+          break;
+        }
+      }
+    }
+    
+    // Handle laser damage
+    for (const [pid, player] of Object.entries(room.players)) {
+      if (!player.alive || !player.laserActive) continue;
+      
+      const def = WEAPON_DEFS[player.weaponId];
+      if (!def.isLaser) continue;
+      
+      // Check if laser hits any other player
+      for (const [targetId, target] of Object.entries(room.players)) {
+        if (targetId === pid || !target.alive) continue;
+        
+        // Simple line of sight check
+        const dx = target.x - player.x;
+        const dy = target.y - player.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        
+        // Check if target is within laser angle and range
+        const angleDiff = Math.abs(angle - player.angle);
+        const normalizedAngleDiff = angleDiff > Math.PI ? 2 * Math.PI - angleDiff : angleDiff;
+        
+        if (normalizedAngleDiff < 0.1 && dist < def.laserRange) {
+          // Check for wall obstruction
+          let blocked = false;
+          const steps = Math.ceil(dist / TILE);
+          for (let i = 1; i < steps; i++) {
+            const checkX = player.x + (dx / steps) * i;
+            const checkY = player.y + (dy / steps) * i;
+            if (isSolid(checkX, checkY)) {
+              blocked = true;
+              break;
+            }
+          }
+          
+          if (!blocked) {
+            // Apply laser damage
+            const damage = def.laserDps * dt;
+            target.hp -= damage;
+            target.hitFlash = 0.15;
+            
+            if (target.hp <= 0) {
+              target.alive = false;
+              target.hp = 0;
+              
+              const killer = room.players[pid];
+              if (killer) {
+                killer.kills = (killer.kills || 0) + 1;
+                
+                const kid = `kill_${Date.now()}_${pid}`;
+                room.kills[kid] = {
+                  killerId: pid,
+                  killerName: killer.name,
+                  victimId: targetId,
+                  victimName: target.name,
+                  ts: Date.now()
+                };
+                
+                broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
+              }
+            }
+          }
+        }
+      }
+    }
     
     // Update bullets
     updateBullets(room.bullets, dt);
@@ -566,14 +675,16 @@ function gameLoop() {
         hitFlash: player.hitFlash,
         dashing: player.dashing,
         name: player.name,
-        color: player.color
+        color: player.color,
+        laserActive: player.laserActive || false
       };
     }
     
     broadcastToRoom(code, {
       type: 'gameState',
       players: playerStates,
-      bullets: room.bullets
+      bullets: room.bullets,
+      pickups: room.pickups
     });
   }
   
