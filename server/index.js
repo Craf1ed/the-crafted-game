@@ -31,7 +31,7 @@ const WEAPON_DEFS = {
   burst:    { id:'burst',    name:'2-BURST',   maxAmmo:24, damage:24,  fireRate:0.55, bulletSpeed:480,  bulletCount:1, burstCount:2, burstDelay:0.09, spread:0.06, bulletLife:1.2, bulletR:4, color:'#88ffff', reloadTime:1800 },
   trishot:  { id:'trishot',  name:'3-SHOT',    maxAmmo:24, damage:14,  fireRate:0.35, bulletSpeed:420,  bulletCount:3, spread:0.22,  bulletLife:1.1, bulletR:4,   color:'#ffaa00', reloadTime:1900 },
   lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500, chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
-  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.03, bulletSpeed:600,  bulletCount:1, spread:0.08,  bulletLife:1.5,  bulletR:3,   color:'#ff00ff', reloadTime:4000, chargeTime:2.0, isLineSpray:true, lineBulletCount:140 },
+  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.03, bulletSpeed:600,  bulletCount:1, spread:0.02,  bulletLife:10.0, bulletR:3,   color:'#ff00ff', reloadTime:4000, chargeTime:2.0, isLineSpray:true, lineBulletCount:140 },
 };
 
 const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot', 'lasergun', 'negav'];
@@ -713,10 +713,14 @@ function gameLoop() {
         const def = WEAPON_DEFS[player.weaponId];
         
         if (def.isLaser) {
+          console.log(`[LASER] Player ${player.id} attempting laser activation - ammo: ${player.ammo}, laserActive: ${player.laserActive}`);
           if (!player.laserActive && player.ammo > 0) {
             player.laserActive = true;
             player.laserStartTime = Date.now();
+            console.log(`[LASER] Player ${player.id} laser activated, broadcasting event`);
             broadcastToRoom(code, { type: 'laserActivated', id: player.id, angle: player.angle, x: player.x, y: player.y });
+          } else if (player.ammo <= 0) {
+            console.log(`[LASER] Player ${player.id} cannot activate laser - no ammo`);
           }
         } else if (def.isLineSpray) {
           if (!player.lineSprayActive && player.ammo > 0) {
@@ -733,6 +737,7 @@ function gameLoop() {
           }
         }
       } else if (!player.inputs.mouseDown && player.laserActive) {
+        console.log(`[LASER] Player ${player.id} laser deactivated`);
         player.laserActive = false;
         broadcastToRoom(code, { type: 'laserDeactivated', id: player.id });
       } else if (!player.inputs.mouseDown && player.lineSprayActive) {
@@ -870,9 +875,13 @@ function gameLoop() {
       if (!def.isLaser) continue;
       
       const chargeElapsed = (Date.now() - player.laserStartTime) / 1000;
-      if (chargeElapsed < def.chargeTime) continue;
+      if (chargeElapsed < def.chargeTime) {
+        console.log(`[LASER] Player ${pid} laser charging - elapsed: ${chargeElapsed.toFixed(2)}s, chargeTime: ${def.chargeTime}s`);
+        continue;
+      }
       
       if (player.ammo <= 0) {
+        console.log(`[LASER] Player ${pid} laser deactivated - no ammo`);
         player.laserActive = false;
         broadcastToRoom(code, { type: 'laserDeactivated', id: pid });
         continue;
@@ -880,6 +889,8 @@ function gameLoop() {
       
       player.ammo -= dt * (1 / def.chargeTime);
       if (player.ammo < 0) player.ammo = 0;
+      
+      console.log(`[LASER] Player ${pid} laser firing - ammo: ${player.ammo.toFixed(1)}`);
       
       for (const [targetId, target] of Object.entries(room.players)) {
         if (targetId === pid || !target.alive) continue;
@@ -908,6 +919,7 @@ function gameLoop() {
             const damage = def.laserDps * dt;
             target.hp -= damage;
             target.hitFlash = 0.15;
+            console.log(`[LASER] Player ${pid} hit target ${targetId} for ${damage.toFixed(2)} damage`);
             
             if (target.hp <= 0) {
               target.alive = false;

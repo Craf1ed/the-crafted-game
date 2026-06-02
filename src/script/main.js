@@ -30,9 +30,10 @@ import {
   playTeleport, playDeath, playRespawn, playDash,
   playKillStreak, playMatchStart, playMatchEnd, startBGM, setBGMVolume,
   startLaserHum, stopLaserHum, playLaserCharge, playLaserOverheat,
-  playEmpPlace, playEmpDetonate, playFlash,
+  playEmpPlace, playEmpDetonate, playFlash, playNegavCharge,
 } from './audio.js';
 import { DASH_SPEED, DASH_DURATION, DASH_IFRAME } from './player.js';
+import { hideVersionMismatchPopup } from './network.js';
 
 const canvas   = document.getElementById('canvas');
 const ctx      = canvas.getContext('2d');
@@ -68,6 +69,10 @@ window.addEventListener('mousemove', e=>{ mouseX=e.clientX; mouseY=e.clientY; })
 window.addEventListener('mousedown', ()=>mouseDown=true);
 window.addEventListener('mouseup',   ()=>mouseDown=false);
 canvas.addEventListener('contextmenu', e=>e.preventDefault());
+
+document.getElementById('version-mismatch-reload').addEventListener('click', () => {
+  location.reload();
+});
 
 let localPlayer   = null;
 let remotePlayers = {};
@@ -411,8 +416,12 @@ async function handleJoin(solo) {
       },
       
       onLaserActivated: (data) => {
+        console.log('[CLIENT] Laser activated event received:', data);
         if (data.id === myId) {
           localPlayer.laserActive = true;
+          localPlayer.laserStartTime = Date.now();
+          console.log('[CLIENT] Local player laser activated');
+          playLaserCharge();
         } else {
           if (remotePlayers[data.id]) {
             remotePlayers[data.id].laserActive = true;
@@ -436,6 +445,9 @@ async function handleJoin(solo) {
           localPlayer.lineSprayActive = true;
           localPlayer.lineSprayStartTime = Date.now();
           localPlayer.lineSprayBulletsFired = 0;
+          if (WEAPON_DEFS[localPlayer.weaponId]?.isLineSpray) {
+            playNegavCharge();
+          }
         } else {
           if (remotePlayers[data.id]) {
             remotePlayers[data.id].lineSprayActive = true;

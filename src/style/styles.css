@@ -357,6 +357,45 @@ body {
 #howtoplay-controls {
   font-size:.7rem; color:rgba(200,180,255,.85); line-height:2.2; letter-spacing:.12em;
 }
+
+#version-mismatch-overlay {
+  position:fixed; inset:0; z-index:100; display:none;
+  align-items:center; justify-content:center;
+  background:rgba(0,0,0,.95);
+}
+#version-mismatch-box {
+  border:2px solid rgba(255,100,100,.6);
+  background:rgba(20,5,10,.98);
+  padding:2.5rem 3rem; width:500px; max-width:94vw;
+  position:relative; font-family:'Share Tech Mono',monospace;
+  box-shadow:0 0 50px rgba(255,100,100,.4), inset 0 0 80px rgba(255,100,100,.15);
+}
+#version-mismatch-box::before {
+  content:''; position:absolute; top:-2px; left:25px; right:25px; height:2px;
+  background:linear-gradient(90deg,transparent,rgba(255,0,0,1),rgba(255,100,0,1),transparent);
+  box-shadow:0 0 20px rgba(255,0,0,.8);
+}
+#version-mismatch-title {
+  font-family:'Orbitron',sans-serif; font-size:1.2rem; font-weight:900;
+  color:#ff6666; letter-spacing:.35em; margin-bottom:1.4rem;
+  text-shadow:0 0 20px rgba(255,100,100,.8);
+  display:flex; align-items:center; gap:10px; justify-content:center;
+}
+#version-mismatch-message {
+  font-size:.85rem; color:rgba(255,200,200,.9); line-height:1.8; letter-spacing:.12em;
+  margin-bottom:2rem; text-align:center;
+}
+#version-mismatch-reload {
+  width:100%; padding:1rem;
+  background:rgba(255,50,50,.2); border:2px solid rgba(255,50,50,.6);
+  color:#ff6666; font-family:'Orbitron',sans-serif; font-size:.9rem;
+  letter-spacing:.22em; cursor:pointer; transition:all .2s;
+  box-shadow:0 0 20px rgba(255,50,50,.3);
+}
+#version-mismatch-reload:hover {
+  background:rgba(255,50,50,.4); border-color:rgba(255,50,50,1);
+  color:#ff9999; box-shadow:0 0 35px rgba(255,50,50,.6);
+}
 #howtoplay-controls .ctrl-row {
   display:flex; align-items:center; gap:12px; padding:4px 0;
   border-bottom:1px solid rgba(180,80,255,.15);
@@ -375,7 +414,7 @@ body {
 #howtoplay-close:hover { background:rgba(255,0,255,.35); color:#fff; box-shadow:0 0 35px rgba(255,0,255,.6); }
 #canvas { display:block; cursor:none; }
 #hud {
-  position:fixed; bottom:0; left:0;
+  position:fixed; top:0; left:0; right:0; bottom:0;
   display:none;
   padding:0;
   z-index:10; pointer-events:none;

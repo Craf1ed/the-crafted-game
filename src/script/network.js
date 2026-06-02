@@ -227,16 +227,43 @@ export async function joinRoom(playerData, pickupPositions) {
 export function sendPlayerInput(inputs) {
   try {
     ws.send(JSON.stringify({ type: 'playerInput', inputs }));
-  } catch(e) {}
+  } catch(e) {
+    if (e.message && e.message.includes('WebSocket is already in CLOSING or CLOSED state')) {
+      showVersionMismatchPopup();
+    }
+  }
 }
 
 export function broadcastRoomMode(mode, killLimit) {
   try {
     ws.send(JSON.stringify({ type: 'setRoomMode', mode, killLimit }));
     console.log('[NET] broadcastRoomMode wrote mode:', mode);
-  } catch(e) { console.error('[NET] broadcastRoomMode FAILED:', e); }
+  } catch(e) {
+    console.error('[NET] broadcastRoomMode FAILED:', e);
+    if (e.message && e.message.includes('WebSocket is already in CLOSING or CLOSED state')) {
+      showVersionMismatchPopup();
+    }
+  }
 }
 
 export function leaveRoom() {
-  try { ws.send(JSON.stringify({ type: 'leaveRoom' })); } catch(e) {}
+  try { ws.send(JSON.stringify({ type: 'leaveRoom' })); } catch(e) {
+    if (e.message && e.message.includes('WebSocket is already in CLOSING or CLOSED state')) {
+      showVersionMismatchPopup();
+    }
+  }
+}
+
+function showVersionMismatchPopup() {
+  const overlay = document.getElementById('version-mismatch-overlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+  }
+}
+
+export function hideVersionMismatchPopup() {
+  const overlay = document.getElementById('version-mismatch-overlay');
+  if (overlay) {
+    overlay.style.display = 'none';
+  }
 }

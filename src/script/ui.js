@@ -53,20 +53,16 @@ export function updateHealthHUD(hp, maxHp) {
 export function updateAmmoHUD(ammo, maxAmmo, reloading) {
   const el = document.getElementById('ammo-display'); if (!el) return;
   el.innerHTML = '';
-  if (maxAmmo <= 5) {
-    for (let i = 0; i < maxAmmo; i++) {
-      const cell = document.createElement('div');
-      cell.className = 'ammo-cell' + (i >= ammo ? ' empty' : '');
-      el.appendChild(cell);
-    }
-  } else {
-    for (let i = 0; i < maxAmmo; i++) {
-      const pip = document.createElement('div');
-      pip.className = 'ammo-pip' + (i >= ammo ? ' empty' : '');
-      if (i%5===4) pip.style.marginRight = '4px';
-      el.appendChild(pip);
-    }
-  }
+  
+  const ammoText = document.createElement('span');
+  ammoText.textContent = Math.floor(ammo);
+  ammoText.style.fontFamily = "'Orbitron', monospace";
+  ammoText.style.fontSize = '1.2rem';
+  ammoText.style.fontWeight = '700';
+  ammoText.style.color = '#ffff00';
+  ammoText.style.textShadow = '0 0 10px rgba(255,255,0,0.8)';
+  ammoText.style.letterSpacing = '0.1em';
+  el.appendChild(ammoText);
 
   const ri = document.getElementById('reload-indicator');
   if (ri) ri.style.display = reloading ? 'flex' : 'none';

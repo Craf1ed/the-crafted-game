@@ -552,6 +552,16 @@ export function playLaserCharge() {
   noise(0.18, 0.12, 0.001, hf, ctx, now + 1.0);
 }
 
+export function playNegavCharge() {
+  if (!enabled) return;
+  const ctx = getCtx(); const now = ctx.currentTime;
+  const m = master(ctx);
+  oscFreqEnv('sawtooth', 200, 800, now, 2.0, 0.15, 0.0001, m, ctx);
+  oscFreqEnv('square', 150, 600, now, 2.0, 0.10, 0.0001, m, ctx);
+  const hf = hpf(1500, m, ctx);
+  noise(0.12, 0.08, 0.001, hf, ctx, now + 1.5);
+}
+
 export function playLaserOverheat() {
   if (!enabled) return;
   const ctx = getCtx(); const now = ctx.currentTime;
