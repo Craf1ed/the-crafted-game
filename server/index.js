@@ -383,6 +383,7 @@ function getRoom(code) {
     rooms[code] = {
       code,
       players: {},
+      bots: {},
       pickups: {},
       bullets: [],
       weaponDrops: {},
@@ -414,6 +415,146 @@ function spawnPickup(room, type, x, y, data = {}) {
 
 function countPickupsByType(room, type) {
   return Object.values(room.pickups).filter(p => p.type === type).length;
+}
+
+// ==================== BOT SYSTEM ====================
+function createBot(id, name, color, x, y) {
+  return {
+    id,
+    name,
+    color,
+    x, y,
+    vx: 0, vy: 0,
+    angle: 0,
+    hp: 100, maxHp: 100,
+    alive: true,
+    kills: 0,
+    weaponId: 'pistol',
+    ammo: WEAPON_DEFS.pistol.maxAmmo,
+    reloading: false, reloadStart: 0,
+    shootCooldown: 0,
+    radius: PLAYER_RADIUS,
+    hitFlash: 0,
+    dashCooldown: 0,
+    dashTimer: 0,
+    dashing: false,
+    dashTrail: [],
+    targetId: null,
+    targetChangeTime: 0,
+    moveDir: { x: 0, y: 0 },
+    moveChangeTime: 0,
+    laserActive: false
+  };
+}
+
+function updateBotAI(bot, room, dt) {
+  if (!bot.alive) return;
+
+  const now = Date.now();
+  
+  // Find target (nearest player)
+  let nearestDist = Infinity;
+  let nearestTarget = null;
+  
+  for (const [pid, player] of Object.entries(room.players)) {
+    if (!player.alive) continue;
+    const dist = Math.hypot(player.x - bot.x, player.y - bot.y);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearestTarget = player;
+    }
+  }
+  
+  // Change target periodically
+  if (now - bot.targetChangeTime > 3000) {
+    bot.targetId = nearestTarget ? nearestTarget.id : null;
+    bot.targetChangeTime = now;
+  }
+  
+  const target = bot.targetId ? room.players[bot.targetId] : null;
+  
+  // Movement AI
+  if (now - bot.moveChangeTime > 2000 || !target) {
+    // Random movement or towards target
+    if (target && Math.random() < 0.7) {
+      const dx = target.x - bot.x;
+      const dy = target.y - bot.y;
+      const dist = Math.hypot(dx, dy);
+      bot.moveDir = { x: dx / dist, y: dy / dist };
+    } else {
+      const angle = Math.random() * Math.PI * 2;
+      bot.moveDir = { x: Math.cos(angle), y: Math.sin(angle) };
+    }
+    bot.moveChangeTime = now;
+  }
+  
+  // Apply movement
+  const moveSpeed = MAX_SPEED * 0.6;
+  bot.vx += bot.moveDir.x * ACCEL * dt;
+  bot.vy += bot.moveDir.y * ACCEL * dt;
+  
+  // Friction
+  const fric = Math.pow(1 - Math.min(FRICTION * dt, 0.99), 1);
+  bot.vx *= fric;
+  bot.vy *= fric;
+  
+  // Speed limit
+  const spd = Math.hypot(bot.vx, bot.vy);
+  if (spd > moveSpeed) {
+    bot.vx = bot.vx / spd * moveSpeed;
+    bot.vy = bot.vy / spd * moveSpeed;
+  }
+  
+  // Collision with walls
+  const r = bot.radius;
+  const nx = bot.x + bot.vx * dt;
+  const clearX = !isSolid(nx + r, bot.y) && !isSolid(nx - r, bot.y)
+              && !isSolid(nx + r, bot.y - r + 2) && !isSolid(nx - r, bot.y - r + 2)
+              && !isSolid(nx + r, bot.y + r - 2) && !isSolid(nx - r, bot.y + r - 2);
+  if (clearX) bot.x = nx; else bot.vx = 0;
+  
+  const ny = bot.y + bot.vy * dt;
+  const clearY = !isSolid(bot.x + r, ny) && !isSolid(bot.x - r, ny)
+              && !isSolid(bot.x + r - 2, ny - r) && !isSolid(bot.x + r - 2, ny + r)
+              && !isSolid(bot.x - r + 2, ny - r) && !isSolid(bot.x - r + 2, ny + r);
+  if (clearY) bot.y = ny; else bot.vy = 0;
+  
+  // Aim at target
+  if (target) {
+    bot.angle = Math.atan2(target.y - bot.y, target.x - bot.x);
+  }
+  
+  // Shooting AI
+  const def = WEAPON_DEFS[bot.weaponId];
+  if (target && bot.shootCooldown <= 0 && !bot.reloading) {
+    const dist = Math.hypot(target.x - bot.x, target.y - bot.y);
+    const inRange = dist < 400;
+    const hasLineOfSight = !isSolid(bot.x + Math.cos(bot.angle) * 30, bot.y + Math.sin(bot.angle) * 30);
+    
+    if (inRange && hasLineOfSight && Math.random() < 0.3) {
+      const newBullets = fireBullets(bot);
+      if (newBullets) {
+        room.bullets.push(...newBullets);
+        broadcastToRoom(room.code, { type: 'bulletsFired', bullets: newBullets });
+      }
+    }
+  }
+  
+  // Reload if low ammo
+  if (bot.ammo <= 2 && !bot.reloading) {
+    tryReload(bot);
+  }
+  
+  // Update cooldowns
+  if (bot.shootCooldown > 0) bot.shootCooldown -= dt;
+  if (bot.dashCooldown > 0) bot.dashCooldown -= dt;
+  if (bot.reloading && now - bot.reloadStart > def.reloadTime) {
+    bot.reloading = false;
+    bot.ammo = def.maxAmmo;
+  }
+  
+  // Hit flash decay
+  if (bot.hitFlash > 0) bot.hitFlash -= dt;
 }
 
 function updatePickups(room, dt) {
@@ -475,6 +616,40 @@ function updatePickups(room, dt) {
       }
     }
   }
+  
+  // Bots can also pick up items
+  for (const [bid, bot] of Object.entries(room.bots)) {
+    if (!bot.alive) continue;
+    
+    for (const [pickupId, pickup] of Object.entries(room.pickups)) {
+      const dist = Math.hypot(bot.x - pickup.x, bot.y - pickup.y);
+      if (dist < PLAYER_RADIUS + 15) {
+        // Bot picked up item
+        let consumed = false;
+        
+        if (pickup.type === 'health' && bot.hp < bot.maxHp) {
+          bot.hp = Math.min(bot.maxHp, bot.hp + pickup.heal);
+          consumed = true;
+        } else if (pickup.type === 'ammo') {
+          const def = WEAPON_DEFS[bot.weaponId];
+          if (bot.ammo < def.maxAmmo) {
+            bot.ammo = Math.min(def.maxAmmo, bot.ammo + pickup.amount);
+            consumed = true;
+          }
+        } else if (pickup.type === 'weapon') {
+          bot.weaponId = pickup.weaponId;
+          bot.ammo = WEAPON_DEFS[pickup.weaponId].maxAmmo;
+          consumed = true;
+        }
+        
+        if (consumed) {
+          delete room.pickups[pickupId];
+          broadcastToRoom(room.code, { type: 'pickupTaken', pickupId });
+          break;
+        }
+      }
+    }
+  }
 }
 
 // ==================== GAME LOOP ====================
@@ -516,6 +691,11 @@ function gameLoop() {
         player.laserActive = false;
         broadcastToRoom(code, { type: 'laserDeactivated', id: player.id });
       }
+    }
+    
+    // Update all bots
+    for (const [id, bot] of Object.entries(room.bots)) {
+      updateBotAI(bot, room, dt);
     }
     
     // Update pickups
@@ -606,14 +786,85 @@ function gameLoop() {
           }
         }
       }
+      
+      // Check if laser hits any bot
+      for (const [bid, bot] of Object.entries(room.bots)) {
+        if (!bot.alive) continue;
+        
+        // Simple line of sight check
+        const dx = bot.x - player.x;
+        const dy = bot.y - player.y;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        
+        // Check if target is within laser angle and range
+        const angleDiff = Math.abs(angle - player.angle);
+        const normalizedAngleDiff = angleDiff > Math.PI ? 2 * Math.PI - angleDiff : angleDiff;
+        
+        if (normalizedAngleDiff < 0.1 && dist < def.laserRange) {
+          // Check for wall obstruction
+          let blocked = false;
+          const steps = Math.ceil(dist / TILE);
+          for (let i = 1; i < steps; i++) {
+            const checkX = player.x + (dx / steps) * i;
+            const checkY = player.y + (dy / steps) * i;
+            if (isSolid(checkX, checkY)) {
+              blocked = true;
+              break;
+            }
+          }
+          
+          if (!blocked) {
+            // Apply laser damage
+            const damage = def.laserDps * dt;
+            bot.hp -= damage;
+            bot.hitFlash = 0.15;
+            
+            if (bot.hp <= 0) {
+              bot.alive = false;
+              bot.hp = 0;
+              
+              const killer = room.players[pid];
+              if (killer) {
+                killer.kills = (killer.kills || 0) + 1;
+                
+                const kid = `kill_${Date.now()}_${pid}`;
+                room.kills[kid] = {
+                  killerId: pid,
+                  killerName: killer.name,
+                  victimId: bid,
+                  victimName: bot.name,
+                  ts: Date.now()
+                };
+                
+                broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
+              }
+              
+              // Respawn bot after delay
+              setTimeout(() => {
+                if (rooms[code] && rooms[code].bots[bid]) {
+                  const newPos = randomOpenPos(Object.values(rooms[code].players).map(p => ({ x: p.x, y: p.y })), 100);
+                  rooms[code].bots[bid].x = newPos.x;
+                  rooms[code].bots[bid].y = newPos.y;
+                  rooms[code].bots[bid].hp = 100;
+                  rooms[code].bots[bid].alive = true;
+                  rooms[code].bots[bid].ammo = WEAPON_DEFS[rooms[code].bots[bid].weaponId].maxAmmo;
+                }
+              }, 5000);
+            }
+          }
+        }
+      }
     }
     
     // Update bullets
     updateBullets(room.bullets, dt);
     
-    // Check bullet collisions
+    // Check bullet collisions (players and bots)
     for (let i = room.bullets.length - 1; i >= 0; i--) {
       const b = room.bullets[i];
+      
+      // Check player collisions
       for (const [pid, player] of Object.entries(room.players)) {
         if (!player.alive || pid === b.ownerId) continue;
         if (Math.hypot(b.x - player.x, b.y - player.y) < PLAYER_RADIUS + b.r) {
@@ -637,7 +888,7 @@ function gameLoop() {
             player.alive = false;
             player.hp = 0;
             
-            const killer = room.players[b.ownerId];
+            const killer = room.players[b.ownerId] || room.bots[b.ownerId];
             if (killer) {
               killer.kills = (killer.kills || 0) + 1;
               
@@ -656,6 +907,54 @@ function gameLoop() {
           
           room.bullets.splice(i, 1);
           break;
+        }
+      }
+      
+      // Check bot collisions
+      if (room.bullets[i]) {
+        for (const [bid, bot] of Object.entries(room.bots)) {
+          if (!bot.alive || bid === b.ownerId) continue;
+          if (Math.hypot(b.x - bot.x, b.y - bot.y) < PLAYER_RADIUS + b.r) {
+            // Hit!
+            bot.hp -= b.dmg;
+            bot.hitFlash = 0.15;
+            
+            if (bot.hp <= 0) {
+              bot.alive = false;
+              bot.hp = 0;
+              
+              const killer = room.players[b.ownerId] || room.bots[b.ownerId];
+              if (killer) {
+                killer.kills = (killer.kills || 0) + 1;
+                
+                const kid = `kill_${Date.now()}_${b.ownerId}`;
+                room.kills[kid] = {
+                  killerId: b.ownerId,
+                  killerName: killer.name,
+                  victimId: bid,
+                  victimName: bot.name,
+                  ts: Date.now()
+                };
+                
+                broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
+              }
+              
+              // Respawn bot after delay
+              setTimeout(() => {
+                if (rooms[code] && rooms[code].bots[bid]) {
+                  const newPos = randomOpenPos(Object.values(rooms[code].players).map(p => ({ x: p.x, y: p.y })), 100);
+                  rooms[code].bots[bid].x = newPos.x;
+                  rooms[code].bots[bid].y = newPos.y;
+                  rooms[code].bots[bid].hp = 100;
+                  rooms[code].bots[bid].alive = true;
+                  rooms[code].bots[bid].ammo = WEAPON_DEFS[rooms[code].bots[bid].weaponId].maxAmmo;
+                }
+              }, 5000);
+            }
+            
+            room.bullets.splice(i, 1);
+            break;
+          }
         }
       }
     }
@@ -680,9 +979,31 @@ function gameLoop() {
       };
     }
     
+    // Broadcast bot states
+    const botStates = {};
+    for (const [id, bot] of Object.entries(room.bots)) {
+      botStates[id] = {
+        x: bot.x,
+        y: bot.y,
+        angle: bot.angle,
+        hp: bot.hp,
+        alive: bot.alive,
+        weaponId: bot.weaponId,
+        ammo: bot.ammo,
+        kills: bot.kills,
+        hitFlash: bot.hitFlash,
+        dashing: bot.dashing,
+        name: bot.name,
+        color: bot.color,
+        laserActive: bot.laserActive || false,
+        isBot: true
+      };
+    }
+    
     broadcastToRoom(code, {
       type: 'gameState',
       players: playerStates,
+      bots: botStates,
       bullets: room.bullets,
       pickups: room.pickups
     });
