@@ -1,7 +1,7 @@
 import { buildMap, loadMap, drawMap, drawMinimap, drawTeleporters, TELEPORTERS,
          getSeededPositions, randomOpenPos, WORLD_W, WORLD_H } from './map.js';
 import { WEAPON_DEFS, SPAWNABLE_WEAPONS, bullets,
-         fireBullets, fireLaserBeam, addRemoteBullet, updateBullets,
+         addRemoteBullet, clearRemoteBullets,
          drawBullets, drawAmmoPickups, drawWeaponPickups, drawDroppedWeapons,
          drawHealthPickups, drawLaserAimBeam, drawActiveLaser } from './weapons.js';
 import {
@@ -10,15 +10,14 @@ import {
   EMP_DAMAGE, EMP_STUN_SECS, EMP_RADIUS,
   addRemoteFlashbang,
 } from './emp.js';
-import { createLocalPlayer, updateLocalPlayer, tryReload, tryDash,
-         equipWeapon, refillAmmo,
+import { createLocalPlayer,
          drawLocalPlayer, drawRemotePlayer, drawDeadPlayer,
          updateRemoteRender, tickRemoteRender, removeRemoteRender,
          COLOR_PALETTE, PLAYER_RADIUS, DASH_COOLDOWN } from './player.js';
 import { initNetwork, joinRoom, checkNameTaken, setCallbacks,
-         pushPlayerState, broadcastBullets, broadcastPickupTaken, broadcastPickupRespawn,
+         sendPlayerInput,
+         broadcastPickupTaken, broadcastPickupRespawn,
          broadcastWeaponDrop, removeWeaponDrop,
-         broadcastKill, broadcastDamage, broadcastFlashbang, broadcastPlacedFlashbang,
          broadcastRoomMode, broadcastMatchEnd } from './network.js';
 import { hideLobby, showHUD, setLobbyStatus,
          renderColorPicker, renderLobbyPlayers,
@@ -266,6 +265,38 @@ async function handleJoin(solo) {
     await initNetwork(room, myId);
 
     setCallbacks({
+      onGameState: (state) => {
+        // Update all players from server state
+        for (const [id, pData] of Object.entries(state.players)) {
+          if (id === myId) {
+            // Update local player from server
+            Object.assign(localPlayer, pData);
+            updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
+            updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, localPlayer.reloading);
+            updateWeaponHUD(localPlayer.weaponId);
+            updateDashHUD(localPlayer.dashCooldown, DASH_COOLDOWN);
+          } else {
+            // Update remote player
+            if (!remotePlayers[id]) remotePlayers[id] = {};
+            Object.assign(remotePlayers[id], pData);
+            updateRemoteRender(id, pData);
+          }
+        }
+        
+        // Update bullets from server
+        clearRemoteBullets();
+        for (const b of state.bullets || []) {
+          addRemoteBullet(b);
+        }
+        
+        // Handle death
+        if (!localPlayer.alive && localPlayer.hp <= 0 && gamePhase === 'playing') {
+          const killer = Object.values(state.players).find(p => p.kills > (localPlayer.kills || 0));
+          if (killer) {
+            handleDeath(killer.name, killer.color);
+          }
+        }
+      },
       onPlayerUpdated: (id, data) => {
         data.id=id;
         if (!remotePlayers[id]) remotePlayers[id]={};
@@ -318,6 +349,11 @@ async function handleJoin(solo) {
       onDamageReceived:  handleRemoteDamage,
       onFlashbangReceived: handleRemoteFlashbang,
       onPlacedFlashbang: (data) => addRemoteFlashbang(data),
+      onPlayerDashed: (id) => {
+        if (id === myId) {
+          playDash();
+        }
+      },
       onRoomModeChanged: (meta) => {
         console.log('[MAIN] onRoomModeChanged fired, gamePhase:', gamePhase, 'meta:', meta);
         if (!meta.startedAt) return;
@@ -970,25 +1006,48 @@ function update(dt, ts){
   if (!localPlayer) return;
   tickRemoteRender(dt);
 
-  if (gamePhase==='playing' && localPlayer.alive) {
+  if (gamePhase==='playing' && gameMode !== 'solo') {
+    // Send inputs to server (server-authoritative)
+    const angle = Math.atan2((mouseY + camY) - localPlayer.y, (mouseX + camX) - localPlayer.x);
+    sendPlayerInput({
+      w: keys['w'] || keys['arrowup'],
+      a: keys['a'] || keys['arrowleft'],
+      s: keys['s'] || keys['arrowdown'],
+      d: keys['d'] || keys['arrowright'],
+      mouseDown: mouseDown,
+      angle: angle,
+      dash: keys[' '] && localPlayer.alive,
+      reload: keys['r'] && localPlayer.alive
+    });
+
+    // Update camera based on server position
+    camX = Math.max(0, Math.min(WORLD_W - canvas.width, localPlayer.x - canvas.width / 2));
+    camY = Math.max(0, Math.min(WORLD_H - canvas.height, localPlayer.y - canvas.height / 2));
+  } else if (gamePhase === 'playing' && !localPlayer.alive && gameMode !== 'solo') {
+    const alive = Object.values(remotePlayers).find(p => p.alive);
+    if (alive) {
+      camX = Math.max(0, Math.min(WORLD_W - canvas.width, alive.x - canvas.width / 2));
+      camY = Math.max(0, Math.min(WORLD_H - canvas.height, alive.y - canvas.height / 2));
+    }
+  }
+
+  // Solo mode still runs client-side (for now)
+  if (gameMode === 'solo') {
     if (!localPlayer.stunTimer || localPlayer.stunTimer <= 0) {
       updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
-      if (mouseDown && localPlayer.shootCooldown<=0
-          && !localPlayer.reloading && localPlayer.ammo>0
-          && !WEAPON_DEFS[localPlayer.weaponId]?.isLaser) handleShoot();
+      if (mouseDown && localPlayer.shootCooldown <= 0 && !localPlayer.reloading && localPlayer.ammo > 0 && !WEAPON_DEFS[localPlayer.weaponId]?.isLaser) handleShoot();
     }
     updateLaser(dt);
 
-    camX=Math.max(0,Math.min(WORLD_W-canvas.width,  localPlayer.x-canvas.width/2));
-    camY=Math.max(0,Math.min(WORLD_H-canvas.height, localPlayer.y-canvas.height/2));
+    camX = Math.max(0, Math.min(WORLD_W - canvas.width, localPlayer.x - canvas.width / 2));
+    camY = Math.max(0, Math.min(WORLD_H - canvas.height, localPlayer.y - canvas.height / 2));
 
     checkPickups();
     checkTeleporters();
     checkOutgoingBulletHits();
     localPlayer.immune = isImmune || (localPlayer.dashing && localPlayer.dashTimer > (DASH_DURATION - 0.18));
-    pushPlayerState(localPlayer, ts);
 
-    const def=WEAPON_DEFS[localPlayer.weaponId];
+    const def = WEAPON_DEFS[localPlayer.weaponId];
     updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
     updateAmmoHUD(localPlayer.ammo, def.maxAmmo, localPlayer.reloading);
     updateWeaponHUD(localPlayer.weaponId);
@@ -996,12 +1055,9 @@ function update(dt, ts){
     if (WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
       _updateLaserHUD();
     }
-  } else if (gamePhase==='playing' && !localPlayer.alive) {
-    const alive=Object.values(remotePlayers).find(p=>p.alive);
-    if (alive){
-      camX=Math.max(0,Math.min(WORLD_W-canvas.width,  alive.x-canvas.width/2));
-      camY=Math.max(0,Math.min(WORLD_H-canvas.height, alive.y-canvas.height/2));
-    }
+
+    tickBots(dt);
+    checkBotCollisions(myId);
   }
 
   updateBullets(dt);
@@ -1022,11 +1078,11 @@ function update(dt, ts){
       }
 
       if (!det.remote) {
-        const localInRadius = localPlayer?.alive && Math.hypot(localPlayer.x-det.x, localPlayer.y-det.y) <= EMP_RADIUS;
-        const localThrewIt  = det.thrownBy === myId;
+        const localInRadius = localPlayer?.alive && Math.hypot(localPlayer.x - det.x, localPlayer.y - det.y) <= EMP_RADIUS;
+        const localThrewIt = det.thrownBy === myId;
         if (localInRadius && !localThrewIt) {
           localPlayer.stunTimer = EMP_STUN_SECS;
-          localPlayer.hitFlash  = 0.4;
+          localPlayer.hitFlash = 0.4;
           triggerFlashbangScreen();
           playFlash();
         }
@@ -1035,7 +1091,7 @@ function update(dt, ts){
       if (gameMode === 'solo') {
         for (const bot of getBots()) {
           if (!bot.alive) continue;
-          if (Math.hypot(bot.x-det.x, bot.y-det.y) <= EMP_RADIUS) {
+          if (Math.hypot(bot.x - det.x, bot.y - det.y) <= EMP_RADIUS) {
             bot.hitFlash = 0.4;
             bot.stunTimer = EMP_STUN_SECS;
           }
@@ -1047,17 +1103,11 @@ function update(dt, ts){
       if (localPlayer.stunTimer < 0) localPlayer.stunTimer = 0;
     }
     const stunEl = document.getElementById('stun-overlay');
-    if (stunEl) stunEl.classList.toggle('active', (localPlayer?.stunTimer||0) > 0);
+    if (stunEl) stunEl.classList.toggle('active', (localPlayer?.stunTimer || 0) > 0);
     updateEmpHUD(getEmpCount());
   }
 
- 
-  if (gameMode === 'solo') {
-    tickBots(dt);
-    checkBotCollisions(myId);
-  }
-
-  if (isHost && gamePhase==='playing' && !matchEnded) checkWinCondition();
+  if (isHost && gamePhase === 'playing' && !matchEnded) checkWinCondition();
 }
 
 function checkWinCondition() {
