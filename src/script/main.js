@@ -368,6 +368,7 @@ async function handleJoin(solo) {
         if (data.id === myId) {
           localPlayer.x = data.x;
           localPlayer.y = data.y;
+          playTeleport();
         } else {
           if (remotePlayers[data.id]) {
             remotePlayers[data.id].x = data.x;
@@ -1156,13 +1157,15 @@ function draw(ts){
 
   if (localPlayer)
     localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t,isImmune) : drawDeadPlayer(ctx,localPlayer,t);
-  if (localPlayer?.alive && WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
-    if (_laserFiring && _laserBeam) {
-      drawActiveLaser(ctx, _laserBeam, t);
-    } else if (_laserCharging && _laserChargeTimer > 0) {
-      const def = WEAPON_DEFS[localPlayer.weaponId];
-      drawLaserAimBeam(ctx, localPlayer, _laserChargeTimer / def.chargeTime);
-    }
+  if (localPlayer?.alive && localPlayer.laserActive && WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
+    const laserBeam = {
+      x: localPlayer.x,
+      y: localPlayer.y,
+      angle: localPlayer.angle,
+      color: localPlayer.color,
+      range: WEAPON_DEFS[localPlayer.weaponId].laserRange
+    };
+    drawActiveLaser(ctx, laserBeam, t);
   }
   
   for (const [,p] of Object.entries(remotePlayers)) {
