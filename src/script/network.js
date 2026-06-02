@@ -74,6 +74,26 @@ export async function initNetwork(code, id) {
           }
           break;
           
+        case 'pickupSpawned':
+          cb.onPickupSpawned(msg.pickup);
+          break;
+          
+        case 'pickupTaken':
+          cb.onPickupTaken(msg.pickupId);
+          break;
+          
+        case 'playerTeleported':
+          cb.onPlayerTeleported(msg);
+          break;
+          
+        case 'laserActivated':
+          cb.onLaserActivated(msg);
+          break;
+          
+        case 'laserDeactivated':
+          cb.onLaserDeactivated(msg);
+          break;
+          
         case 'pickupTaken':
           cb.onPickupTaken(msg.pickupId);
           break;
