@@ -192,6 +192,7 @@ function createPlayer(id, name, color, spawnPos) {
     dashTimer: 0,
     dashing: false,
     dashTrail: [],
+    teleportCooldown: 0,
     inputs: { w: false, a: false, s: false, d: false, mouseDown: false, mouseX: 0, mouseY: 0 }
   };
 }
@@ -208,6 +209,9 @@ function updatePlayer(player, dt) {
   
   // Dash cooldown
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
+  
+  // Teleport cooldown
+  if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
   
   // Dash timer
   if (player.dashTimer > 0) {
@@ -443,7 +447,8 @@ function createBot(id, name, color, x, y) {
     targetChangeTime: 0,
     moveDir: { x: 0, y: 0 },
     moveChangeTime: 0,
-    laserActive: false
+    laserActive: false,
+    teleportCooldown: 0
   };
 }
 
@@ -548,6 +553,7 @@ function updateBotAI(bot, room, dt) {
   // Update cooldowns
   if (bot.shootCooldown > 0) bot.shootCooldown -= dt;
   if (bot.dashCooldown > 0) bot.dashCooldown -= dt;
+  if (bot.teleportCooldown > 0) bot.teleportCooldown -= dt;
   if (bot.reloading && now - bot.reloadStart > def.reloadTime) {
     bot.reloading = false;
     bot.ammo = def.maxAmmo;
@@ -704,6 +710,7 @@ function gameLoop() {
     // Handle teleporters
     for (const [pid, player] of Object.entries(room.players)) {
       if (!player.alive) continue;
+      if (player.teleportCooldown > 0) continue;
       
       const tx = Math.floor(player.x / TILE);
       const ty = Math.floor(player.y / TILE);
@@ -712,12 +719,39 @@ function gameLoop() {
         if (tx === tp.a.tx && ty === tp.a.ty) {
           player.x = tp.b.tx * TILE + TILE / 2;
           player.y = tp.b.ty * TILE + TILE / 2;
+          player.teleportCooldown = 1.0; // 1 second cooldown
           broadcastToRoom(code, { type: 'playerTeleported', id: pid, x: player.x, y: player.y });
           break;
         } else if (tx === tp.b.tx && ty === tp.b.ty) {
           player.x = tp.a.tx * TILE + TILE / 2;
           player.y = tp.a.ty * TILE + TILE / 2;
+          player.teleportCooldown = 1.0; // 1 second cooldown
           broadcastToRoom(code, { type: 'playerTeleported', id: pid, x: player.x, y: player.y });
+          break;
+        }
+      }
+    }
+    
+    // Handle teleporters for bots
+    for (const [bid, bot] of Object.entries(room.bots)) {
+      if (!bot.alive) continue;
+      if (bot.teleportCooldown > 0) continue;
+      
+      const tx = Math.floor(bot.x / TILE);
+      const ty = Math.floor(bot.y / TILE);
+      
+      for (const tp of TELEPORTERS) {
+        if (tx === tp.a.tx && ty === tp.a.ty) {
+          bot.x = tp.b.tx * TILE + TILE / 2;
+          bot.y = tp.b.ty * TILE + TILE / 2;
+          bot.teleportCooldown = 1.0; // 1 second cooldown
+          broadcastToRoom(code, { type: 'playerTeleported', id: bid, x: bot.x, y: bot.y });
+          break;
+        } else if (tx === tp.b.tx && ty === tp.b.ty) {
+          bot.x = tp.a.tx * TILE + TILE / 2;
+          bot.y = tp.a.ty * TILE + TILE / 2;
+          bot.teleportCooldown = 1.0; // 1 second cooldown
+          broadcastToRoom(code, { type: 'playerTeleported', id: bid, x: bot.x, y: bot.y });
           break;
         }
       }
