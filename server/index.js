@@ -631,26 +631,32 @@ function updatePickups(room, dt) {
     for (const [pickupId, pickup] of Object.entries(room.pickups)) {
       const dist = Math.hypot(player.x - pickup.x, player.y - pickup.y);
       if (dist < PLAYER_RADIUS + 15) {
+        console.log(`[PICKUP] Player ${pid} near pickup ${pickupId} type: ${pickup.type} dist: ${dist.toFixed(2)}`);
         let consumed = false;
         
         if (pickup.type === 'health' && player.hp < player.maxHp) {
           player.hp = Math.min(player.maxHp, player.hp + pickup.heal);
           consumed = true;
+          console.log(`[PICKUP] Player ${pid} picked up health`);
         } else if (pickup.type === 'ammo') {
           const def = WEAPON_DEFS[player.weaponId];
           if (player.ammo < def.maxAmmo) {
             player.ammo = Math.min(def.maxAmmo, player.ammo + pickup.amount);
             consumed = true;
+            console.log(`[PICKUP] Player ${pid} picked up ammo`);
           }
         } else if (pickup.type === 'weapon') {
           player.weaponId = pickup.weaponId;
           player.ammo = WEAPON_DEFS[pickup.weaponId].maxAmmo;
           consumed = true;
+          console.log(`[PICKUP] Player ${pid} picked up weapon ${pickup.weaponId}`);
         } else if (pickup.type === 'emp' || pickup.type === 'flashbang') {
           if (pickup.type === 'flashbang') {
             player.flashbangs = (player.flashbangs || 0) + 1;
+            console.log(`[PICKUP] Player ${pid} picked up flashbang, now has ${player.flashbangs}`);
           } else if (pickup.type === 'emp') {
             player.emps = (player.emps || 0) + 1;
+            console.log(`[PICKUP] Player ${pid} picked up emp, now has ${player.emps}`);
           }
           consumed = true;
         }
