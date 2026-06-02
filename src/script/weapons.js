@@ -8,7 +8,7 @@ export const WEAPON_DEFS = {
   trishot:  { id:'trishot',  name:'3-SHOT',    maxAmmo:24, damage:14,  fireRate:0.35, bulletSpeed:420,  bulletCount:3, spread:0.22,  bulletLife:1.1,  bulletR:4,   color:'#ffaa00', reloadTime:1900 },
   lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500,
               chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
-  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.06, bulletSpeed:600,  bulletCount:1, spread:0.02,  bulletLife:10.0, bulletR:3,   color:'#ff00ff', reloadTime:4000,
+  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.12, bulletSpeed:600,  bulletCount:1, spread:0.02,  bulletLife:10.0, bulletR:3,   color:'#ff00ff', reloadTime:4000,
               chargeTime:2.0, isLineSpray:true, lineBulletCount:140 },
 };
 
