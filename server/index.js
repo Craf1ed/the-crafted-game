@@ -593,7 +593,17 @@ function updatePickups(room, dt) {
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
-  // Weapon pickups
+  // Weapon pickups - ensure at least 1 of each weapon type is always on map
+  for (const weaponId of SPAWNABLE_WEAPONS) {
+    const hasWeapon = Object.values(room.pickups).some(p => p.type === 'weapon' && p.weaponId === weaponId);
+    if (!hasWeapon && countPickupsByType(room, 'weapon') < MAX_WEAPON_PICKUPS) {
+      const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+      spawnPickup(room, 'weapon', pos.x, pos.y, { weaponId: weaponId });
+      broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
+    }
+  }
+  
+  // Random additional weapon pickups
   if (countPickupsByType(room, 'weapon') < MAX_WEAPON_PICKUPS && Math.random() < 0.005) {
     const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
     const weapon = SPAWNABLE_WEAPONS[Math.floor(Math.random() * SPAWNABLE_WEAPONS.length)];
