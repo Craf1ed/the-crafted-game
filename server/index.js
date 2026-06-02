@@ -496,6 +496,9 @@ function gameLoop() {
       }
     }
     
+    // Update pickups
+    updatePickups(room, dt);
+    
     // Update bullets
     updateBullets(room.bullets, dt);
     
