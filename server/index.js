@@ -709,6 +709,36 @@ function gameLoop() {
         player.laserActive = false;
         broadcastToRoom(code, { type: 'laserDeactivated', id: player.id });
       }
+      
+      // Handle burst fire (additional shots)
+      if (player.burstTimer <= 0 && player.burstRemaining > 0) {
+        const def = WEAPON_DEFS[player.weaponId];
+        if (def.burstCount && player.burstRemaining < def.burstCount && player.ammo > 0) {
+          const ang = player.angle + (Math.random() - 0.5) * def.spread;
+          const bullet = {
+            id: `b_${player.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            x: player.x + Math.cos(ang) * 22,
+            y: player.y + Math.sin(ang) * 22,
+            vx: Math.cos(ang) * def.bulletSpeed,
+            vy: Math.sin(ang) * def.bulletSpeed,
+            life: def.bulletLife,
+            maxLife: def.bulletLife,
+            r: def.bulletR,
+            dmg: def.damage,
+            color: player.color || def.color,
+            ownerId: player.id,
+            weaponId: player.weaponId || def.id,
+          };
+          player.ammo = Math.max(0, player.ammo - 1);
+          player.burstRemaining++;
+          player.burstTimer = def.burstDelay || 0.09;
+          
+          room.bullets.push(bullet);
+          broadcastToRoom(code, { type: 'bulletsFired', bullets: [bullet] });
+        } else {
+          player.burstRemaining = 0;
+        }
+      }
     }
     
     // Update all bots
