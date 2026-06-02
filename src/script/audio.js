@@ -556,10 +556,28 @@ export function playNegavCharge() {
   if (!enabled) return;
   const ctx = getCtx(); const now = ctx.currentTime;
   const m = master(ctx);
-  oscFreqEnv('sawtooth', 200, 800, now, 2.0, 0.15, 0.0001, m, ctx);
-  oscFreqEnv('square', 150, 600, now, 2.0, 0.10, 0.0001, m, ctx);
-  const hf = hpf(1500, m, ctx);
-  noise(0.12, 0.08, 0.001, hf, ctx, now + 1.5);
+  
+  // Motor spinning up sound - frequency ramp from low to high
+  oscFreqEnv('sawtooth', 100, 400, now, 2.0, 0.20, 0.0001, m, ctx);
+  oscFreqEnv('square', 80, 300, now, 2.0, 0.15, 0.0001, m, ctx);
+  
+  // Add noise for motor texture
+  const hf = hpf(200, m, ctx);
+  noise(0.15, 0.10, 0.001, hf, ctx, now + 0.5);
+  
+  // Add a rumbling low frequency
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.setValueAtTime(15, now);
+  lfo.frequency.linearRampToValueAtTime(40, now + 2.0);
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.setValueAtTime(0.3, now);
+  lfoGain.gain.linearRampToValueAtTime(0.5, now + 2.0);
+  lfoGain.gain.linearRampToValueAtTime(0, now + 2.2);
+  lfo.connect(lfoGain);
+  lfoGain.connect(m);
+  lfo.start(now);
+  lfo.stop(now + 2.2);
 }
 
 export function playLaserOverheat() {

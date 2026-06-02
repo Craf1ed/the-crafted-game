@@ -31,7 +31,7 @@ const WEAPON_DEFS = {
   burst:    { id:'burst',    name:'2-BURST',   maxAmmo:24, damage:24,  fireRate:0.55, bulletSpeed:480,  bulletCount:1, burstCount:2, burstDelay:0.09, spread:0.06, bulletLife:1.2, bulletR:4, color:'#88ffff', reloadTime:1800 },
   trishot:  { id:'trishot',  name:'3-SHOT',    maxAmmo:24, damage:14,  fireRate:0.35, bulletSpeed:420,  bulletCount:3, spread:0.22,  bulletLife:1.1, bulletR:4,   color:'#ffaa00', reloadTime:1900 },
   lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500, chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
-  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.12, bulletSpeed:600,  bulletCount:1, spread:0.02,  bulletLife:10.0, bulletR:3,   color:'#ff00ff', reloadTime:4000, chargeTime:2.0, isLineSpray:true, lineBulletCount:140 },
+  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.15, bulletSpeed:600,  bulletCount:1, spread:0.02,  bulletLife:10.0, bulletR:3,   color:'#ff00ff', reloadTime:4000, chargeTime:2.0, isLineSpray:true, lineBulletCount:140 },
 };
 
 const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot', 'lasergun', 'negav'];

@@ -3,12 +3,12 @@ import { isSolid } from './map.js';
 export const WEAPON_DEFS = {
   pistol:   { id:'pistol',   name:'PISTOL',    maxAmmo:30, damage:18,  fireRate:0.22, bulletSpeed:440,  bulletCount:1, spread:0.04,  bulletLife:1.3,  bulletR:4,   color:'#ffff44', reloadTime:1600 },
   shotgun:  { id:'shotgun',  name:'SHOTGUN',   maxAmmo:16, damage:22,  fireRate:0.85, bulletSpeed:380,  bulletCount:6, spread:0.38,  bulletLife:0.55, bulletR:3.5, color:'#ff8833', reloadTime:2200 },
-  sniper:   { id:'sniper',   name:'SNIPER',    maxAmmo:10, damage:95,  fireRate:1.2,  bulletSpeed:900,  bulletCount:1, spread:0.005, bulletLife:2.2,  bulletR:3,   color:'#00ffff', reloadTime:2800 },
+  sniper:   { id:'sniper',   name:'AWP',    maxAmmo:5, damage:100,  fireRate:2.2,  bulletSpeed:1300,  bulletCount:1, spread:0.005, bulletLife:2.2,  bulletR:3,   color:'#00ffff', reloadTime:2800 },
   burst:    { id:'burst',    name:'2-BURST',   maxAmmo:24, damage:24,  fireRate:0.55, bulletSpeed:480,  bulletCount:1, burstCount:2, burstDelay:0.09, spread:0.06, bulletLife:1.2, bulletR:4, color:'#88ffff', reloadTime:1800 },
   trishot:  { id:'trishot',  name:'3-SHOT',    maxAmmo:24, damage:14,  fireRate:0.35, bulletSpeed:420,  bulletCount:3, spread:0.22,  bulletLife:1.1,  bulletR:4,   color:'#ffaa00', reloadTime:1900 },
   lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500,
               chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
-  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.12, bulletSpeed:600,  bulletCount:1, spread:0.02,  bulletLife:10.0, bulletR:3,   color:'#ff00ff', reloadTime:4000,
+  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:30, bulletSpeed:600,  bulletCount:1, spread:0.02,  bulletLife:10.0, bulletR:3,   color:'#ff00ff', reloadTime:4000,
               chargeTime:2.0, isLineSpray:true, lineBulletCount:140 },
 };
 
