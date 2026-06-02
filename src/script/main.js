@@ -186,17 +186,13 @@ async function handleSolo() {
   setDifficulty(diff);
 
   await loadMap();
+  
+  // Pickups are now spawned server-side
+  ammoPickups = {};
+  weaponPickups = {};
+  healthPickups = {};
+  
   const seed = roomHash('SOLO_'+name);
-  const ammoPos   = getSeededPositions(seed,          20, 100);
-  const weaponPos = getSeededPositions(seed + 99999,   5, 120).map((p,i)=>({
-    ...p, weaponId: SPAWNABLE_WEAPONS[i % SPAWNABLE_WEAPONS.length]
-  }));
-  const healthPos = getSeededPositions(seed + 55555,  10, 110);
-
-  ammoPos.forEach((p,i)=>   { ammoPickups[`ammo_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
-  weaponPos.forEach((p,i)=> { weaponPickups[`wp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
-  healthPos.forEach((p,i)=> { healthPickups[`hp_${i}`]   = {...p, pulse: Math.random()*Math.PI*2}; });
-
   const empPos = getSeededPositions(seed + 77777, 5, 140);
   empPickupMap = {};
   empPos.forEach((p,i) => {
@@ -466,7 +462,7 @@ async function handleJoin(solo) {
       angle: 0, hp: 100, maxHp: 100, alive: true,
       kills: 0, weaponId: 'pistol', ammo: WEAPON_DEFS.pistol.maxAmmo,
       joinedAt: Date.now(),
-    }, { ammo: ammoPos, weapons: weaponPos, health: healthPos, flashbang: flashbangPos });
+    }, {});
 
     isHost = hostResult;
 
@@ -773,49 +769,8 @@ function checkPickups() {
   if (!localPlayer.alive) return;
   const r = PLAYER_RADIUS;
 
-  for (const [id, pk] of Object.entries(healthPickups)) {
-    if (Math.hypot(localPlayer.x-pk.x, localPlayer.y-pk.y) < r+14) {
-      localPlayer.hp = Math.min(localPlayer.maxHp, localPlayer.hp + 30);
-      delete healthPickups[id];
-      broadcastPickupTaken(id);
-      playPickup('health');
-      updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
-      setTimeout(()=>{
-        broadcastPickupRespawn(id, { ...pk, pulse: Math.random()*Math.PI*2 });
-      }, 12000);
-    }
-  }
-
-  for (const [id, pk] of Object.entries(ammoPickups)) {
-    if (Math.hypot(localPlayer.x-pk.x, localPlayer.y-pk.y) < r+14) {
-      refillAmmo(localPlayer);
-      delete ammoPickups[id];
-      broadcastPickupTaken(id);
-      playPickup('ammo');
-      setTimeout(()=>{
-        const newPk = { ...pk, pulse: Math.random()*Math.PI*2 };
-        broadcastPickupRespawn(id, newPk);
-      }, 8000);
-    }
-  }
-
-  for (const [id, wp] of Object.entries(weaponPickups)) {
-    if (Math.hypot(localPlayer.x-wp.x, localPlayer.y-wp.y) < r+18) {
-      if (localPlayer.weaponId!=='pistol') {
-        const dp=randomOpenPos([{x:localPlayer.x,y:localPlayer.y}],60);
-        const did=`drop_${Date.now()}_${myId}`;
-        broadcastWeaponDrop(did, localPlayer.weaponId, dp.x, dp.y);
-        weaponDrops[did]={ weaponId:localPlayer.weaponId, x:dp.x, y:dp.y };
-      }
-      equipWeapon(localPlayer, wp.weaponId);
-      playPickup('weapon');
-      delete weaponPickups[id];
-      broadcastPickupTaken(id);
-      setTimeout(()=>{
-        broadcastPickupRespawn(id, { ...wp, pulse: Math.random()*Math.PI*2 });
-      }, 15000);
-    }
-  }
+  // Pickup collision is now handled server-side
+  // Client only renders pickups received from server
 
   for (const [did, drop] of Object.entries(weaponDrops)) {
     if (Math.hypot(localPlayer.x-drop.x, localPlayer.y-drop.y) < r+18) {
@@ -1226,6 +1181,20 @@ function draw(ts){
     } else if (_laserCharging && _laserChargeTimer > 0) {
       const def = WEAPON_DEFS[localPlayer.weaponId];
       drawLaserAimBeam(ctx, localPlayer, _laserChargeTimer / def.chargeTime);
+    }
+  }
+  
+  // Draw laser beams for remote players
+  for (const [,p] of Object.entries(remotePlayers)) {
+    if (p.alive && p.laserActive && WEAPON_DEFS[p.weaponId]?.isLaser) {
+      const laserBeam = {
+        x: p.x,
+        y: p.y,
+        angle: p.angle,
+        color: p.color,
+        range: WEAPON_DEFS[p.weaponId].laserRange
+      };
+      drawActiveLaser(ctx, laserBeam, t);
     }
   }
 
