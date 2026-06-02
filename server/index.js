@@ -374,6 +374,8 @@ const rooms = {};
 const MAX_HEALTH_PICKUPS = 8;
 const MAX_AMMO_PICKUPS = 12;
 const MAX_WEAPON_PICKUPS = 6;
+const MAX_EMP_PICKUPS = 4;
+const MAX_FLASHBANG_PICKUPS = 4;
 
 function getRoom(code) {
   if (!rooms[code]) {
@@ -575,6 +577,18 @@ function updatePickups(room, dt) {
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
+  if (countPickupsByType(room, 'emp') < MAX_EMP_PICKUPS && Math.random() < 0.008) {
+    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    spawnPickup(room, 'emp', pos.x, pos.y, {});
+    broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
+  }
+  
+  if (countPickupsByType(room, 'flashbang') < MAX_FLASHBANG_PICKUPS && Math.random() < 0.008) {
+    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    spawnPickup(room, 'flashbang', pos.x, pos.y, {});
+    broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
+  }
+  
   for (const [id, pickup] of Object.entries(room.pickups)) {
     if (pickup.isSpawning) {
       pickup.spawnAnimation += dt * 3;
@@ -605,6 +619,8 @@ function updatePickups(room, dt) {
         } else if (pickup.type === 'weapon') {
           player.weaponId = pickup.weaponId;
           player.ammo = WEAPON_DEFS[pickup.weaponId].maxAmmo;
+          consumed = true;
+        } else if (pickup.type === 'emp' || pickup.type === 'flashbang') {
           consumed = true;
         }
         
@@ -637,6 +653,8 @@ function updatePickups(room, dt) {
         } else if (pickup.type === 'weapon') {
           bot.weaponId = pickup.weaponId;
           bot.ammo = WEAPON_DEFS[pickup.weaponId].maxAmmo;
+          consumed = true;
+        } else if (pickup.type === 'emp' || pickup.type === 'flashbang') {
           consumed = true;
         }
         
