@@ -422,6 +422,7 @@ async function handleJoin(solo) {
           localPlayer.laserStartTime = Date.now();
           console.log('[CLIENT] Local player laser activated');
           playLaserCharge();
+          startLaserHum();
         } else {
           if (remotePlayers[data.id]) {
             remotePlayers[data.id].laserActive = true;
@@ -433,6 +434,7 @@ async function handleJoin(solo) {
       onLaserDeactivated: (data) => {
         if (data.id === myId) {
           localPlayer.laserActive = false;
+          stopLaserHum();
         } else {
           if (remotePlayers[data.id]) {
             remotePlayers[data.id].laserActive = false;
