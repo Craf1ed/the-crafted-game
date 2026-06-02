@@ -1,6 +1,6 @@
 const WS_URL = window.location.hostname === 'localhost' 
   ? 'ws://localhost:3001/ws' 
-  : 'wss://the-crafted-game-server.onrender.com/ws';
+  : 'wss://the-crafted-game-backend.onrender.com/ws';
 
 let ws;
 let roomCode = '';
