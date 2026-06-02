@@ -36,21 +36,60 @@ const WEAPON_DEFS = {
 };
 
 // ==================== MAP SYSTEM ====================
-const MAP_W = 60;
-const MAP_H = 45;
-const WORLD_W = MAP_W * TILE;
-const WORLD_H = MAP_H * TILE;
+let MAP_W = 60;
+let MAP_H = 45;
+let WORLD_W = MAP_W * TILE;
+let WORLD_H = MAP_H * TILE;
 
-// Simple built-in map (can be loaded from file later)
 let MAP = [];
-const TELEPORTERS = [
-  { a:{tx:4,ty:4},   b:{tx:55,ty:40}, color:'#ff44ff' },
-  { a:{tx:55,ty:4},  b:{tx:4,ty:40},  color:'#44ffaa' },
-  { a:{tx:30,ty:2},  b:{tx:30,ty:42}, color:'#ffaa00' },
-  { a:{tx:4,ty:22},  b:{tx:55,ty:22}, color:'#44aaff' },
-  { a:{tx:14,ty:12}, b:{tx:45,ty:32}, color:'#ff8844' },
-  { a:{tx:45,ty:12}, b:{tx:14,ty:32}, color:'#88ff44' },
-];
+let TELEPORTERS = [];
+
+const fs = require('fs');
+const path = require('path');
+
+function loadMap() {
+  const mapPath = path.join(__dirname, 'map.txt');
+  
+  try {
+    const text = fs.readFileSync(mapPath, 'utf8');
+    const lines = text.split('\n');
+    
+    // Find teleporters line
+    const tpLine = lines.find(l => l.trimStart().startsWith('# teleporters:'));
+    if (tpLine) {
+      const raw = tpLine.replace('# teleporters:', '').trim();
+      TELEPORTERS = raw.split('|').map(pair => {
+        const parts = pair.trim().split(',');
+        return {
+          a: { tx: parseInt(parts[0]), ty: parseInt(parts[1]) },
+          b: { tx: parseInt(parts[2]), ty: parseInt(parts[3]) },
+          color: '#' + parts[4]
+        };
+      });
+    }
+    
+    // Parse grid
+    const dataLines = lines.filter(l => l.trim() && !l.trimStart().startsWith('#'));
+    const grid = dataLines.map(l => l.trim().split(/\s+/).map(Number));
+    
+    if (grid.length === 0) {
+      console.warn('[SERVER] Empty map file — using built-in map');
+      buildMap();
+      return;
+    }
+    
+    MAP_H = grid.length;
+    MAP_W = grid[0].length;
+    WORLD_W = MAP_W * TILE;
+    WORLD_H = MAP_H * TILE;
+    MAP = grid;
+    
+    console.log(`[SERVER] Loaded map: ${MAP_W}x${MAP_H}, ${TELEPORTERS.length} teleporters`);
+  } catch (e) {
+    console.warn(`[SERVER] Could not load map.txt (${e.message}) — using built-in map`);
+    buildMap();
+  }
+}
 
 function buildMap() {
   const m = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(0));
@@ -97,7 +136,7 @@ function buildMap() {
   MAP = m;
 }
 
-buildMap();
+loadMap();
 
 function isSolid(wx, wy) {
   const tx = Math.floor(wx/TILE);
