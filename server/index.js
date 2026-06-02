@@ -31,9 +31,10 @@ const WEAPON_DEFS = {
   burst:    { id:'burst',    name:'2-BURST',   maxAmmo:24, damage:24,  fireRate:0.55, bulletSpeed:480,  bulletCount:1, burstCount:2, burstDelay:0.09, spread:0.06, bulletLife:1.2, bulletR:4, color:'#88ffff', reloadTime:1800 },
   trishot:  { id:'trishot',  name:'3-SHOT',    maxAmmo:24, damage:14,  fireRate:0.35, bulletSpeed:420,  bulletCount:3, spread:0.22,  bulletLife:1.1, bulletR:4,   color:'#ffaa00', reloadTime:1900 },
   lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500, chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
+  negav:    { id:'negav',    name:'NEGAV',     maxAmmo:140, damage:8,   fireRate:0.03, bulletSpeed:600,  bulletCount:1, spread:0.08,  bulletLife:1.5,  bulletR:3,   color:'#ff00ff', reloadTime:4000, chargeTime:2.0, isLineSpray:true, lineBulletCount:140 },
 };
 
-const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot', 'lasergun'];
+const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot', 'lasergun', 'negav'];
 
 let MAP_W = 60;
 let MAP_H = 45;
@@ -152,7 +153,7 @@ function isOpenTile(tx, ty) {
   return true;
 }
 
-function randomOpenPos(avoidPoints = [], minDist = 120) {
+function randomOpenPos(avoidPoints = [], minDist = 120, avoidPickupTiles = new Set()) {
   let tx, ty, tries = 0;
   do {
     tx = 2 + Math.floor(Math.random() * (MAP_W - 4));
@@ -161,7 +162,8 @@ function randomOpenPos(avoidPoints = [], minDist = 120) {
     if (tries > 2000) break;
   } while (
     !isOpenTile(tx, ty) ||
-    avoidPoints.some(p => Math.hypot(tx * TILE + TILE / 2 - p.x, ty * TILE + TILE / 2 - p.y) < minDist)
+    avoidPoints.some(p => Math.hypot(tx * TILE + TILE / 2 - p.x, ty * TILE + TILE / 2 - p.y) < minDist) ||
+    avoidPickupTiles.has(`${tx},${ty}`)
   );
   return { x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 };
 }
@@ -319,6 +321,15 @@ function fireBullets(player) {
     if (!player.laserActive) {
       player.laserActive = true;
       player.laserStartTime = Date.now();
+    }
+    return null;
+  }
+  
+  if (def.isLineSpray) {
+    if (!player.lineSprayActive) {
+      player.lineSprayActive = true;
+      player.lineSprayStartTime = Date.now();
+      player.lineSprayBulletsFired = 0;
     }
     return null;
   }
@@ -549,14 +560,29 @@ function updateBotAI(bot, room, dt) {
 function updatePickups(room, dt) {
   const now = Date.now();
   
+  const pickupTiles = new Set();
+  for (const pickup of Object.values(room.pickups)) {
+    const tx = Math.floor(pickup.x / TILE);
+    const ty = Math.floor(pickup.y / TILE);
+    pickupTiles.add(`${tx},${ty}`);
+  }
+  
+  for (const tp of TELEPORTERS) {
+    const tx = Math.floor(tp.x / TILE);
+    const ty = Math.floor(tp.y / TILE);
+    pickupTiles.add(`${tx},${ty}`);
+  }
+  
+  const playerPositions = Object.values(room.players).map(p => ({ x: p.x, y: p.y }));
+  
   if (countPickupsByType(room, 'health') < MAX_HEALTH_PICKUPS && Math.random() < 0.01) {
-    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    const pos = randomOpenPos(playerPositions, 100, pickupTiles);
     spawnPickup(room, 'health', pos.x, pos.y, { heal: 25 });
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
   if (countPickupsByType(room, 'ammo') < MAX_AMMO_PICKUPS && Math.random() < 0.02) {
-    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    const pos = randomOpenPos(playerPositions, 100, pickupTiles);
     spawnPickup(room, 'ammo', pos.x, pos.y, { amount: 10 });
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
@@ -564,27 +590,27 @@ function updatePickups(room, dt) {
   for (const weaponId of SPAWNABLE_WEAPONS) {
     const hasWeapon = Object.values(room.pickups).some(p => p.type === 'weapon' && p.weaponId === weaponId);
     if (!hasWeapon && countPickupsByType(room, 'weapon') < MAX_WEAPON_PICKUPS) {
-      const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+      const pos = randomOpenPos(playerPositions, 100, pickupTiles);
       spawnPickup(room, 'weapon', pos.x, pos.y, { weaponId: weaponId });
       broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
     }
   }
   
   if (countPickupsByType(room, 'weapon') < MAX_WEAPON_PICKUPS && Math.random() < 0.005) {
-    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    const pos = randomOpenPos(playerPositions, 100, pickupTiles);
     const weapon = SPAWNABLE_WEAPONS[Math.floor(Math.random() * SPAWNABLE_WEAPONS.length)];
     spawnPickup(room, 'weapon', pos.x, pos.y, { weaponId: weapon });
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
   if (countPickupsByType(room, 'emp') < MAX_EMP_PICKUPS && Math.random() < 0.008) {
-    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    const pos = randomOpenPos(playerPositions, 100, pickupTiles);
     spawnPickup(room, 'emp', pos.x, pos.y, {});
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
   if (countPickupsByType(room, 'flashbang') < MAX_FLASHBANG_PICKUPS && Math.random() < 0.008) {
-    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    const pos = randomOpenPos(playerPositions, 100, pickupTiles);
     spawnPickup(room, 'flashbang', pos.x, pos.y, {});
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
@@ -692,6 +718,13 @@ function gameLoop() {
             player.laserStartTime = Date.now();
             broadcastToRoom(code, { type: 'laserActivated', id: player.id, angle: player.angle, x: player.x, y: player.y });
           }
+        } else if (def.isLineSpray) {
+          if (!player.lineSprayActive) {
+            player.lineSprayActive = true;
+            player.lineSprayStartTime = Date.now();
+            player.lineSprayBulletsFired = 0;
+            broadcastToRoom(code, { type: 'lineSprayActivated', id: player.id, angle: player.angle, x: player.x, y: player.y });
+          }
         } else {
           const newBullets = fireBullets(player);
           if (newBullets) {
@@ -702,6 +735,9 @@ function gameLoop() {
       } else if (!player.inputs.mouseDown && player.laserActive) {
         player.laserActive = false;
         broadcastToRoom(code, { type: 'laserDeactivated', id: player.id });
+      } else if (!player.inputs.mouseDown && player.lineSprayActive) {
+        player.lineSprayActive = false;
+        broadcastToRoom(code, { type: 'lineSprayDeactivated', id: player.id });
       }
       
       if (player.burstTimer <= 0 && player.burstRemaining > 0) {
@@ -730,6 +766,45 @@ function gameLoop() {
           broadcastToRoom(code, { type: 'bulletsFired', bullets: [bullet] });
         } else {
           player.burstRemaining = 0;
+        }
+      }
+      
+      if (player.lineSprayActive) {
+        const def = WEAPON_DEFS[player.weaponId];
+        if (def.isLineSpray) {
+          const chargeElapsed = (Date.now() - player.lineSprayStartTime) / 1000;
+          if (chargeElapsed >= def.chargeTime) {
+            const bulletsToFire = Math.min(5, def.lineBulletCount - (player.lineSprayBulletsFired || 0));
+            if (bulletsToFire > 0 && player.ammo > 0) {
+              const newBullets = [];
+              for (let i = 0; i < bulletsToFire; i++) {
+                const ang = player.angle + (Math.random() - 0.5) * def.spread;
+                newBullets.push({
+                  id: `b_${player.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                  x: player.x + Math.cos(ang) * 22,
+                  y: player.y + Math.sin(ang) * 22,
+                  vx: Math.cos(ang) * def.bulletSpeed,
+                  vy: Math.sin(ang) * def.bulletSpeed,
+                  life: def.bulletLife,
+                  maxLife: def.bulletLife,
+                  r: def.bulletR,
+                  dmg: def.damage,
+                  color: player.color || def.color,
+                  ownerId: player.id,
+                  weaponId: player.weaponId || def.id,
+                });
+                player.ammo = Math.max(0, player.ammo - 1);
+                player.lineSprayBulletsFired = (player.lineSprayBulletsFired || 0) + 1;
+              }
+              room.bullets.push(...newBullets);
+              broadcastToRoom(code, { type: 'bulletsFired', bullets: newBullets });
+            }
+            
+            if ((player.lineSprayBulletsFired || 0) >= def.lineBulletCount) {
+              player.lineSprayActive = false;
+              broadcastToRoom(code, { type: 'lineSprayDeactivated', id: player.id });
+            }
+          }
         }
       }
     }
@@ -840,6 +915,25 @@ function gameLoop() {
                 };
                 
                 broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
+              }
+              
+              if (room.meta && room.meta.mode !== 'lms' && room.meta.mode !== 'solo') {
+                setTimeout(() => {
+                  if (rooms[code] && rooms[code].players[targetId]) {
+                    const spawn = randomOpenPos(Object.values(rooms[code].players).filter(p => p.alive).map(p => ({ x: p.x, y: p.y })), 120);
+                    rooms[code].players[targetId].x = spawn.x;
+                    rooms[code].players[targetId].y = spawn.y;
+                    rooms[code].players[targetId].vx = 0;
+                    rooms[code].players[targetId].vy = 0;
+                    rooms[code].players[targetId].hp = 100;
+                    rooms[code].players[targetId].alive = true;
+                    rooms[code].players[targetId].ammo = WEAPON_DEFS[rooms[code].players[targetId].weaponId].maxAmmo;
+                    rooms[code].players[targetId].reloading = false;
+                    rooms[code].players[targetId].shootCooldown = 0;
+                    rooms[code].players[targetId].hitFlash = 0;
+                    broadcastToRoom(code, { type: 'playerRespawned', id: targetId, x: spawn.x, y: spawn.y });
+                  }
+                }, 5000);
               }
             }
           }
@@ -952,6 +1046,25 @@ function gameLoop() {
               
               broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
             }
+            
+            if (room.meta && room.meta.mode !== 'lms' && room.meta.mode !== 'solo') {
+              setTimeout(() => {
+                if (rooms[code] && rooms[code].players[pid]) {
+                  const spawn = randomOpenPos(Object.values(rooms[code].players).filter(p => p.alive).map(p => ({ x: p.x, y: p.y })), 120);
+                  rooms[code].players[pid].x = spawn.x;
+                  rooms[code].players[pid].y = spawn.y;
+                  rooms[code].players[pid].vx = 0;
+                  rooms[code].players[pid].vy = 0;
+                  rooms[code].players[pid].hp = 100;
+                  rooms[code].players[pid].alive = true;
+                  rooms[code].players[pid].ammo = WEAPON_DEFS[rooms[code].players[pid].weaponId].maxAmmo;
+                  rooms[code].players[pid].reloading = false;
+                  rooms[code].players[pid].shootCooldown = 0;
+                  rooms[code].players[pid].hitFlash = 0;
+                  broadcastToRoom(code, { type: 'playerRespawned', id: pid, x: spawn.x, y: spawn.y });
+                }
+              }, 5000);
+            }
           }
           
           room.bullets.splice(i, 1);
@@ -1018,6 +1131,7 @@ function gameLoop() {
         kills: player.kills,
         hitFlash: player.hitFlash,
         dashing: player.dashing,
+        dashCooldown: player.dashCooldown,
         name: player.name,
         color: player.color,
         laserActive: player.laserActive || false

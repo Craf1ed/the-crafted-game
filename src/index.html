@@ -91,7 +91,7 @@
 <canvas id="minimap" width="260" height="195"></canvas>
 <div id="minimap-label">MINIMAP</div>
 <div id="hud">
-  <div id="hud-left">
+  <div id="hud-top-left">
     <div class="hud-block" id="hud-health-block">
       <div class="hud-block-label"><i class="fa-solid fa-heart"></i> HEALTH</div>
       <div class="hud-health-row">
@@ -99,6 +99,9 @@
         <span id="hp-val">100</span>
       </div>
     </div>
+  </div>
+  
+  <div id="hud-bottom-left">
     <div class="hud-block" id="hud-weapon-block">
       <div class="hud-block-label"><i class="fa-solid fa-gun"></i> WEAPON</div>
       <div class="hud-weapon-row">
@@ -120,14 +123,6 @@
     </div>
 
     <div class="hud-abilities">
-
-      <div class="hud-ability-block">
-        <div class="hud-ability-label" id="dash-icon"><i class="fa-solid fa-bolt"></i> DASH <kbd>SPACE</kbd></div>
-        <div class="hud-bar-track">
-          <div class="hud-bar-fill" id="dash-bar-fill"></div>
-        </div>
-        <span class="hud-ability-val" id="dash-ready-label">READY</span>
-      </div>
       <div class="hud-ability-block" id="laser-hud-wrap" style="opacity:0.38">
         <div class="hud-ability-label" style="color:#ff5555"><i class="fa-solid fa-crosshairs"></i> LASER <kbd>HOLD</kbd></div>
         <div class="hud-bar-track laser">
@@ -135,16 +130,25 @@
         </div>
         <span class="hud-ability-val" id="laser-ready-label">HOLD</span>
       </div>
-
+    </div>
+  </div>
+  
+  <div id="hud-center-bottom">
+    <div class="hud-abilities">
+      <div class="hud-ability-block">
+        <div class="hud-ability-label" id="dash-icon"><i class="fa-solid fa-bolt"></i> DASH <kbd>SPACE</kbd></div>
+        <div class="hud-bar-track">
+          <div class="hud-bar-fill" id="dash-bar-fill"></div>
+        </div>
+        <span class="hud-ability-val" id="dash-ready-label">READY</span>
+      </div>
     </div>
     <div id="controls-hint">
       <div class="ctrl-row"><kbd>WASD</kbd><span>Move</span></div>
       <div class="ctrl-row"><kbd>MOUSE</kbd><span>Aim &amp; Shoot</span></div>
-      <div class="ctrl-row"><kbd>SPACE</kbd><span>Dash</span></div>
       <div class="ctrl-row"><kbd>R</kbd><span>Reload</span></div>
       <div class="ctrl-row"><kbd>E</kbd><span>Throw Flashbang</span></div>
     </div>
-
   </div>
 </div>
 

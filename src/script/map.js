@@ -336,12 +336,15 @@ function _drawPad(ctx, wx, wy, color, t) {
 
 export function drawMinimap(mmCtx, mw, mh, players, myId, camX, camY, canvasW, canvasH, ammoList, weaponList, healthList) {
   const sx=mw/WORLD_W, sy=mh/WORLD_H;
-  mmCtx.fillStyle='rgba(0,0,0,0.93)'; mmCtx.fillRect(0,0,mw,mh);
+  mmCtx.fillStyle='rgba(8,6,15,0.95)'; mmCtx.fillRect(0,0,mw,mh);
   for (let ty=0;ty<MAP_H;ty++)
     for (let tx=0;tx<MAP_W;tx++)
       if (MAP[ty][tx]===1){
-        mmCtx.fillStyle='#183018';
+        mmCtx.fillStyle='#08060f';
         mmCtx.fillRect(tx*TILE*sx,ty*TILE*sy,TILE*sx+0.5,TILE*sy+0.5);
+        mmCtx.fillStyle='rgba(120,80,255,0.3)';
+        mmCtx.fillRect(tx*TILE*sx,ty*TILE*sy,TILE*sx,0.5);
+        mmCtx.fillRect(tx*TILE*sx,ty*TILE*sy,0.5,TILE*sy);
       }
   for (const tp of TELEPORTERS)
     for (const end of [tp.a,tp.b]){
@@ -358,6 +361,6 @@ export function drawMinimap(mmCtx, mw, mh, players, myId, camX, camY, canvasW, c
     mmCtx.fillStyle=id===myId?'#ffffff':(p.color||'#0ff');
     mmCtx.beginPath(); mmCtx.arc(p.x*sx,p.y*sy,id===myId?3.5:2.5,0,Math.PI*2); mmCtx.fill();
   }
-  mmCtx.strokeStyle='rgba(0,255,255,0.2)'; mmCtx.lineWidth=0.5;
+  mmCtx.strokeStyle='rgba(120,80,255,0.4)'; mmCtx.lineWidth=0.5;
   mmCtx.strokeRect(camX*sx,camY*sy,canvasW*sx,canvasH*sy);
 }

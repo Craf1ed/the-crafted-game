@@ -377,6 +377,39 @@ async function handleJoin(solo) {
         }
       },
       
+      onPlayerRespawned: (data) => {
+        if (data.id === myId) {
+          localPlayer.x = data.x;
+          localPlayer.y = data.y;
+          localPlayer.vx = 0;
+          localPlayer.vy = 0;
+          localPlayer.hp = 100;
+          localPlayer.alive = true;
+          localPlayer.ammo = WEAPON_DEFS[localPlayer.weaponId].maxAmmo;
+          localPlayer.reloading = false;
+          localPlayer.shootCooldown = 0;
+          localPlayer.hitFlash = 0;
+          hideRespawnOverlay();
+          document.getElementById('spectator-label').style.display = 'none';
+          playRespawn();
+          updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
+          updateWeaponHUD(localPlayer.weaponId);
+        } else {
+          if (remotePlayers[data.id]) {
+            remotePlayers[data.id].x = data.x;
+            remotePlayers[data.id].y = data.y;
+            remotePlayers[data.id].vx = 0;
+            remotePlayers[data.id].vy = 0;
+            remotePlayers[data.id].hp = 100;
+            remotePlayers[data.id].alive = true;
+            remotePlayers[data.id].ammo = WEAPON_DEFS[remotePlayers[data.id].weaponId].maxAmmo;
+            remotePlayers[data.id].reloading = false;
+            remotePlayers[data.id].shootCooldown = 0;
+            remotePlayers[data.id].hitFlash = 0;
+          }
+        }
+      },
+      
       onLaserActivated: (data) => {
         if (data.id === myId) {
           localPlayer.laserActive = true;
@@ -394,6 +427,29 @@ async function handleJoin(solo) {
         } else {
           if (remotePlayers[data.id]) {
             remotePlayers[data.id].laserActive = false;
+          }
+        }
+      },
+      
+      onLineSprayActivated: (data) => {
+        if (data.id === myId) {
+          localPlayer.lineSprayActive = true;
+          localPlayer.lineSprayStartTime = Date.now();
+          localPlayer.lineSprayBulletsFired = 0;
+        } else {
+          if (remotePlayers[data.id]) {
+            remotePlayers[data.id].lineSprayActive = true;
+            remotePlayers[data.id].angle = data.angle;
+          }
+        }
+      },
+      
+      onLineSprayDeactivated: (data) => {
+        if (data.id === myId) {
+          localPlayer.lineSprayActive = false;
+        } else {
+          if (remotePlayers[data.id]) {
+            remotePlayers[data.id].lineSprayActive = false;
           }
         }
       },
@@ -587,24 +643,6 @@ function handleDeath(killerName, killerColor) {
   }
 
   showEliminatedOverlay(killerName, killerColor);
-
-  respawnTimer = RESPAWN_SECS;
-  updateRespawnUI();
-  if (respawnHandle) clearInterval(respawnHandle);
-  respawnHandle = setInterval(() => {
-    respawnTimer--;
-    updateRespawnUI();
-    if (respawnTimer <= 0) {
-      clearInterval(respawnHandle);
-      respawnHandle = null;
-      if (gameMode === 'lms') {
-        const el = document.getElementById('respawn-count');
-        if (el) el.textContent = 'YOU ARE ELIMINATED — SPECTATING';
-      } else {
-        doRespawn();
-      }
-    }
-  }, 1000);
 }
 
 function showSoloGameOver(killerName, killerColor) {
