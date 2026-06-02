@@ -1034,19 +1034,8 @@ function update(dt, ts){
   }
 
   if (gameMode === 'solo') {
-    if (!localPlayer.stunTimer || localPlayer.stunTimer <= 0) {
-      updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
-      if (mouseDown && localPlayer.shootCooldown <= 0 && !localPlayer.reloading && localPlayer.ammo > 0 && !WEAPON_DEFS[localPlayer.weaponId]?.isLaser) handleShoot();
-    }
-    updateLaser(dt);
-
     camX = Math.max(0, Math.min(WORLD_W - canvas.width, localPlayer.x - canvas.width / 2));
     camY = Math.max(0, Math.min(WORLD_H - canvas.height, localPlayer.y - canvas.height / 2));
-
-    checkPickups();
-    checkTeleporters();
-    checkOutgoingBulletHits();
-    localPlayer.immune = isImmune || (localPlayer.dashing && localPlayer.dashTimer > (DASH_DURATION - 0.18));
 
     const def = WEAPON_DEFS[localPlayer.weaponId];
     updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
