@@ -16,9 +16,7 @@ import { createLocalPlayer,
          COLOR_PALETTE, PLAYER_RADIUS, DASH_COOLDOWN } from './player.js';
 import { initNetwork, joinRoom, checkNameTaken, setCallbacks,
          sendPlayerInput,
-         broadcastPickupTaken, broadcastPickupRespawn,
-         broadcastWeaponDrop, removeWeaponDrop,
-         broadcastRoomMode, broadcastMatchEnd } from './network.js';
+         broadcastRoomMode } from './network.js';
 import { hideLobby, showHUD, setLobbyStatus,
          renderColorPicker, renderLobbyPlayers,
          updateHealthHUD, updateAmmoHUD, updateWeaponHUD,
@@ -1060,7 +1058,7 @@ function update(dt, ts){
     checkBotCollisions(myId);
   }
 
-  updateBullets(dt);
+  // Bullets are now updated server-side and received via gameState
   tickKillFeed();
 
   if (gamePhase === 'playing') {

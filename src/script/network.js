@@ -134,7 +134,21 @@ export async function initNetwork(code, id) {
   return ws;
 }
 
+function waitForOpen() {
+  return new Promise((resolve, reject) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      resolve();
+    } else if (ws.readyState === WebSocket.CONNECTING) {
+      ws.addEventListener('open', () => resolve(), { once: true });
+      ws.addEventListener('error', reject, { once: true });
+    } else {
+      reject(new Error('WebSocket is not connected'));
+    }
+  });
+}
+
 export async function checkNameTaken(code, name) {
+  await waitForOpen();
   return new Promise((resolve) => {
     const handleMessage = (event) => {
       try {
@@ -154,6 +168,7 @@ export async function checkNameTaken(code, name) {
 }
 
 export async function joinRoom(playerData, pickupPositions) {
+  await waitForOpen();
   return new Promise((resolve) => {
     const handleMessage = (event) => {
       try {
