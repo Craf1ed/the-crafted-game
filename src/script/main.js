@@ -968,28 +968,21 @@ function _updateLaserHUD() {
   const wrap  = document.getElementById('laser-hud-wrap');
   if (!fill || !wrap) return;
 
-  if (_laserCooldown > 0) {
-    const pct = _laserCooldown / LASER_COOLDOWN;
-    wrap.style.opacity = '1';
-    fill.style.width = (pct * 100) + '%';
-    fill.style.background = 'linear-gradient(90deg,#ff6600,#ffaa00)';
-    fill.style.boxShadow = '0 0 10px #ff6600';
-    if (label) { label.textContent = 'COOL ' + _laserCooldown.toFixed(1)+'s'; label.style.color = '#ffaa00'; }
-  } else if (_laserFiring) {
-    const pct = 1 - (_laserFireTimer / LASER_MAX_FIRE);
-    wrap.style.opacity = '1';
-    fill.style.width = (pct * 100) + '%';
-    fill.style.background = 'linear-gradient(90deg,#ff2222,#ffffff)';
-    fill.style.boxShadow = '0 0 16px #ff2222, 0 0 32px #ff2222';
-    if (label) { label.textContent = 'FIRING'; label.style.color = '#fff'; }
-  } else if (_laserCharging && _laserChargeTimer > 0) {
+  if (localPlayer.laserActive) {
     const def = WEAPON_DEFS[localPlayer.weaponId];
-    const p = _laserChargeTimer / def.chargeTime;
+    const chargeElapsed = (Date.now() - localPlayer.laserStartTime) / 1000;
+    const p = Math.min(1, chargeElapsed / def.chargeTime);
     wrap.style.opacity = '1';
     fill.style.width = (p * 100) + '%';
-    fill.style.background = `linear-gradient(90deg,#ff2222,rgb(255,${Math.floor(40+p*180)},40))`;
-    fill.style.boxShadow = `0 0 ${6+p*16}px #ff2222`;
-    if (label) { label.textContent = Math.floor(p*100)+'%'; label.style.color = `rgb(255,${Math.floor(40+p*180)},40)`; }
+    if (p < 1) {
+      fill.style.background = `linear-gradient(90deg,#ff2222,rgb(255,${Math.floor(40+p*180)},40))`;
+      fill.style.boxShadow = `0 0 ${6+p*16}px #ff2222`;
+      if (label) { label.textContent = Math.floor(p*100)+'%'; label.style.color = `rgb(255,${Math.floor(40+p*180)},40)`; }
+    } else {
+      fill.style.background = 'linear-gradient(90deg,#ff2222,#ffffff)';
+      fill.style.boxShadow = '0 0 16px #ff2222, 0 0 32px #ff2222';
+      if (label) { label.textContent = 'FIRING'; label.style.color = '#fff'; }
+    }
   } else {
     wrap.style.opacity = '0.38';
     fill.style.width = '100%';

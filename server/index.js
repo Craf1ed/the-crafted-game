@@ -709,23 +709,23 @@ function gameLoop() {
     for (const [id, player] of Object.entries(room.players)) {
       updatePlayer(player, dt);
       
-      if (player.inputs.mouseDown && player.shootCooldown <= 0 && !player.reloading) {
+      if (player.inputs.mouseDown && !player.reloading) {
         const def = WEAPON_DEFS[player.weaponId];
         
         if (def.isLaser) {
-          if (!player.laserActive) {
+          if (!player.laserActive && player.ammo > 0) {
             player.laserActive = true;
             player.laserStartTime = Date.now();
             broadcastToRoom(code, { type: 'laserActivated', id: player.id, angle: player.angle, x: player.x, y: player.y });
           }
         } else if (def.isLineSpray) {
-          if (!player.lineSprayActive) {
+          if (!player.lineSprayActive && player.ammo > 0) {
             player.lineSprayActive = true;
             player.lineSprayStartTime = Date.now();
             player.lineSprayBulletsFired = 0;
             broadcastToRoom(code, { type: 'lineSprayActivated', id: player.id, angle: player.angle, x: player.x, y: player.y });
           }
-        } else {
+        } else if (player.shootCooldown <= 0) {
           const newBullets = fireBullets(player);
           if (newBullets) {
             room.bullets.push(...newBullets);
@@ -868,6 +868,18 @@ function gameLoop() {
       
       const def = WEAPON_DEFS[player.weaponId];
       if (!def.isLaser) continue;
+      
+      const chargeElapsed = (Date.now() - player.laserStartTime) / 1000;
+      if (chargeElapsed < def.chargeTime) continue;
+      
+      if (player.ammo <= 0) {
+        player.laserActive = false;
+        broadcastToRoom(code, { type: 'laserDeactivated', id: pid });
+        continue;
+      }
+      
+      player.ammo -= dt * (1 / def.chargeTime);
+      if (player.ammo < 0) player.ammo = 0;
       
       for (const [targetId, target] of Object.entries(room.players)) {
         if (targetId === pid || !target.alive) continue;

@@ -388,6 +388,7 @@ body {
   border:2px solid rgba(180,80,255,.4);
   border-radius:8px;
   box-shadow:0 0 30px rgba(180,80,255,.2);
+  z-index:10;
 }
 
 #hud-bottom-left {
@@ -398,6 +399,7 @@ body {
   border:2px solid rgba(180,80,255,.4);
   border-radius:8px;
   box-shadow:0 0 30px rgba(180,80,255,.2);
+  z-index:10;
 }
 
 #hud-center-bottom {
@@ -408,23 +410,11 @@ body {
   border:2px solid rgba(180,80,255,.4);
   border-radius:8px;
   box-shadow:0 0 30px rgba(180,80,255,.2);
+  z-index:10;
 }
 
 #hud-left {
-  display:flex; flex-direction:column; gap:0;
-  padding:18px 26px 24px;
-  background:
-    linear-gradient(to top, rgba(2,0,12,.98) 0%, rgba(2,0,12,.92) 70%, transparent 100%);
-  border-top:2px solid rgba(180,80,255,.4);
-  border-right:2px solid rgba(180,80,255,.2);
-  min-width:360px;
-  position:relative;
-  box-shadow:0 0 40px rgba(180,80,255,.2);
-}
-#hud-left::before {
-  content:''; position:absolute; top:0; left:0; right:0; height:2px;
-  background:linear-gradient(90deg, rgba(255,0,255,.9), rgba(0,255,255,.6), transparent);
-  box-shadow:0 0 20px rgba(255,0,255,.7);
+  display:none;
 }
 
 .hud-block {
