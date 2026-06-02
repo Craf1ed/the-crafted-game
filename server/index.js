@@ -35,6 +35,8 @@ const WEAPON_DEFS = {
   lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500, chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
 };
 
+const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot'];
+
 // ==================== MAP SYSTEM ====================
 let MAP_W = 60;
 let MAP_H = 45;
