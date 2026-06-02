@@ -647,6 +647,11 @@ function updatePickups(room, dt) {
           player.ammo = WEAPON_DEFS[pickup.weaponId].maxAmmo;
           consumed = true;
         } else if (pickup.type === 'emp' || pickup.type === 'flashbang') {
+          if (pickup.type === 'flashbang') {
+            player.flashbangs = (player.flashbangs || 0) + 1;
+          } else if (pickup.type === 'emp') {
+            player.emps = (player.emps || 0) + 1;
+          }
           consumed = true;
         }
         
@@ -681,6 +686,11 @@ function updatePickups(room, dt) {
           bot.ammo = WEAPON_DEFS[pickup.weaponId].maxAmmo;
           consumed = true;
         } else if (pickup.type === 'emp' || pickup.type === 'flashbang') {
+          if (pickup.type === 'flashbang') {
+            bot.flashbangs = (bot.flashbangs || 0) + 1;
+          } else if (pickup.type === 'emp') {
+            bot.emps = (bot.emps || 0) + 1;
+          }
           consumed = true;
         }
         
