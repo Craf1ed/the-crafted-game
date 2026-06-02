@@ -373,6 +373,7 @@ const MAX_WEAPON_PICKUPS = 6;
 function getRoom(code) {
   if (!rooms[code]) {
     rooms[code] = {
+      code,
       players: {},
       pickups: {},
       bullets: [],
