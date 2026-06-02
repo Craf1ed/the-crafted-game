@@ -35,7 +35,7 @@ const WEAPON_DEFS = {
   lasergun: { id:'lasergun', name:'LASER GUN', maxAmmo:3,  damage:0,   fireRate:0.0,  bulletSpeed:0,    bulletCount:0, spread:0,     bulletLife:0,    bulletR:0,   color:'#ff2222', reloadTime:3500, chargeTime:1.2, isLaser:true, laserDps:120, laserRange:99999 },
 };
 
-const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot'];
+const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot', 'lasergun'];
 
 // ==================== MAP SYSTEM ====================
 let MAP_W = 60;
@@ -213,6 +213,11 @@ function updatePlayer(player, dt) {
   // Teleport cooldown
   if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
   
+  // Burst timer
+  if (player.burstTimer > 0) {
+    player.burstTimer -= dt;
+  }
+  
   // Dash timer
   if (player.dashTimer > 0) {
     player.dashTimer -= dt;
@@ -359,6 +364,13 @@ function fireBullets(player) {
   
   player.ammo = Math.max(0, player.ammo - 1);
   player.shootCooldown = def.fireRate;
+  
+  // Handle burst fire
+  if (def.burstCount && def.burstCount > 1) {
+    player.burstRemaining = (player.burstRemaining || 0) + 1;
+    player.burstTimer = def.burstDelay || 0.09;
+  }
+  
   return newBullets;
 }
 
