@@ -13,7 +13,7 @@ import {
 import { createLocalPlayer,
          drawLocalPlayer, drawRemotePlayer, drawDeadPlayer,
          updateRemoteRender, tickRemoteRender, removeRemoteRender,
-         COLOR_PALETTE, PLAYER_RADIUS, DASH_COOLDOWN } from './player.js';
+         COLOR_PALETTE, PLAYER_RADIUS, DASH_COOLDOWN, tryDash } from './player.js';
 import { initNetwork, joinRoom, checkNameTaken, setCallbacks,
          sendPlayerInput,
          broadcastRoomMode } from './network.js';

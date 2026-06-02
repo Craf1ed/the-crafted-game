@@ -363,6 +363,11 @@ function updateBullets(bullets, dt) {
 // ==================== ROOM STORAGE ====================
 const rooms = {};
 
+// Pickup spawn limits
+const MAX_HEALTH_PICKUPS = 8;
+const MAX_AMMO_PICKUPS = 12;
+const MAX_WEAPON_PICKUPS = 6;
+
 function getRoom(code) {
   if (!rooms[code]) {
     rooms[code] = {
@@ -381,6 +386,84 @@ function getRoom(code) {
     };
   }
   return rooms[code];
+}
+
+// ==================== PICKUP SYSTEM ====================
+function spawnPickup(room, type, x, y, data = {}) {
+  const id = `pickup_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  room.pickups[id] = {
+    id,
+    type, // 'health', 'ammo', 'weapon'
+    x, y,
+    ...data,
+    spawnedAt: Date.now()
+  };
+  return id;
+}
+
+function countPickupsByType(room, type) {
+  return Object.values(room.pickups).filter(p => p.type === type).length;
+}
+
+function updatePickups(room, dt) {
+  // Spawn pickups periodically
+  const now = Date.now();
+  
+  // Health pickups
+  if (countPickupsByType(room, 'health') < MAX_HEALTH_PICKUPS && Math.random() < 0.01) {
+    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    spawnPickup(room, 'health', pos.x, pos.y, { heal: 25 });
+    broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
+  }
+  
+  // Ammo pickups
+  if (countPickupsByType(room, 'ammo') < MAX_AMMO_PICKUPS && Math.random() < 0.02) {
+    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    spawnPickup(room, 'ammo', pos.x, pos.y, { amount: 10 });
+    broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
+  }
+  
+  // Weapon pickups
+  if (countPickupsByType(room, 'weapon') < MAX_WEAPON_PICKUPS && Math.random() < 0.005) {
+    const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
+    const weapon = SPAWNABLE_WEAPONS[Math.floor(Math.random() * SPAWNABLE_WEAPONS.length)];
+    spawnPickup(room, 'weapon', pos.x, pos.y, { weaponId: weapon });
+    broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
+  }
+  
+  // Check pickup collisions
+  for (const [pid, player] of Object.entries(room.players)) {
+    if (!player.alive) continue;
+    
+    for (const [pickupId, pickup] of Object.entries(room.pickups)) {
+      const dist = Math.hypot(player.x - pickup.x, player.y - pickup.y);
+      if (dist < PLAYER_RADIUS + 15) {
+        // Player picked up item
+        let consumed = false;
+        
+        if (pickup.type === 'health' && player.hp < player.maxHp) {
+          player.hp = Math.min(player.maxHp, player.hp + pickup.heal);
+          consumed = true;
+        } else if (pickup.type === 'ammo') {
+          const def = WEAPON_DEFS[player.weaponId];
+          if (player.ammo < def.maxAmmo) {
+            player.ammo = Math.min(def.maxAmmo, player.ammo + pickup.amount);
+            consumed = true;
+          }
+        } else if (pickup.type === 'weapon') {
+          player.weaponId = pickup.weaponId;
+          player.ammo = WEAPON_DEFS[pickup.weaponId].maxAmmo;
+          consumed = true;
+        }
+        
+        if (consumed) {
+          delete room.pickups[pickupId];
+          broadcastToRoom(room.code, { type: 'pickupTaken', pickupId });
+          break;
+        }
+      }
+    }
+  }
 }
 
 // ==================== GAME LOOP ====================
