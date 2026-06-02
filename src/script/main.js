@@ -277,6 +277,15 @@ async function handleJoin(solo) {
           }
         }
         
+        // Update bots from server state
+        if (state.bots) {
+          for (const [id, botData] of Object.entries(state.bots)) {
+            if (!remotePlayers[id]) remotePlayers[id] = {};
+            Object.assign(remotePlayers[id], botData);
+            updateRemoteRender(id, botData);
+          }
+        }
+        
         // Update bullets from server
         clearRemoteBullets();
         for (const b of state.bullets || []) {

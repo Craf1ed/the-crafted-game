@@ -1139,6 +1139,16 @@ wss.on('connection', (ws) => {
           room.state = 'playing';
           room.lastTick = Date.now();
           
+          // Spawn bots for solo mode
+          if (msg.mode === 'solo' && Object.keys(room.bots).length === 0) {
+            const botColors = ['#ff4444', '#44ff44', '#4444ff', '#ffff44', '#ff44ff', '#44ffff'];
+            for (let i = 0; i < 5; i++) {
+              const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 150);
+              const botId = `bot_${i}`;
+              room.bots[botId] = createBot(botId, `Bot ${i + 1}`, botColors[i % botColors.length], pos.x, pos.y);
+            }
+          }
+          
           broadcastToRoom(currentRoom, { type: 'roomModeChanged', meta: room.meta });
           break;
         }
