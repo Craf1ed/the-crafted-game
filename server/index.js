@@ -160,6 +160,11 @@ function updatePlayer(player, dt) {
 
   const inputs = player.inputs;
   
+  // Update angle from input
+  if (inputs.angle !== undefined) {
+    player.angle = inputs.angle;
+  }
+  
   // Dash cooldown
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
   
@@ -361,7 +366,7 @@ function gameLoop() {
         const newBullets = fireBullets(player);
         if (newBullets) {
           room.bullets.push(...newBullets);
-          io.to(code).emit('bulletsFired', newBullets);
+          broadcastToRoom(code, { type: 'bulletsFired', bullets: newBullets });
         }
       }
     }
@@ -389,7 +394,7 @@ function gameLoop() {
             ts: Date.now()
           };
           
-          io.to(code).emit('damageReceived', room.damage[pid][evId]);
+          broadcastToRoom(code, { type: 'damageReceived', event: room.damage[pid][evId] });
           
           if (player.hp <= 0) {
             player.alive = false;
@@ -408,7 +413,7 @@ function gameLoop() {
                 ts: Date.now()
               };
               
-              io.to(code).emit('killRegistered', room.kills[kid]);
+              broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
             }
           }
           
@@ -437,7 +442,8 @@ function gameLoop() {
       };
     }
     
-    io.to(code).emit('gameState', {
+    broadcastToRoom(code, {
+      type: 'gameState',
       players: playerStates,
       bullets: room.bullets
     });
@@ -570,6 +576,7 @@ wss.on('connection', (ws) => {
             winner: null,
             startedAt: Date.now()
           };
+          room.state = 'playing';
           room.lastTick = Date.now();
           
           broadcastToRoom(currentRoom, { type: 'roomModeChanged', meta: room.meta });
