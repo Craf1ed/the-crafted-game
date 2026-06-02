@@ -1201,24 +1201,30 @@ function draw(ts){
   if (localPlayer)
     localPlayer.alive ? drawLocalPlayer(ctx,localPlayer,t,isImmune) : drawDeadPlayer(ctx,localPlayer,t);
   if (localPlayer?.alive && localPlayer.laserActive && WEAPON_DEFS[localPlayer.weaponId]?.isLaser) {
+    const def = WEAPON_DEFS[localPlayer.weaponId];
     const laserBeam = {
       x: localPlayer.x,
       y: localPlayer.y,
       angle: localPlayer.angle,
       color: localPlayer.color,
-      range: WEAPON_DEFS[localPlayer.weaponId].laserRange
+      range: def.laserRange,
+      hitX: localPlayer.x + Math.cos(localPlayer.angle) * def.laserRange,
+      hitY: localPlayer.y + Math.sin(localPlayer.angle) * def.laserRange
     };
     drawActiveLaser(ctx, laserBeam, t);
   }
   
   for (const [,p] of Object.entries(remotePlayers)) {
     if (p.alive && p.laserActive && WEAPON_DEFS[p.weaponId]?.isLaser) {
+      const def = WEAPON_DEFS[p.weaponId];
       const laserBeam = {
         x: p.x,
         y: p.y,
         angle: p.angle,
         color: p.color,
-        range: WEAPON_DEFS[p.weaponId].laserRange
+        range: def.laserRange,
+        hitX: p.x + Math.cos(p.angle) * def.laserRange,
+        hitY: p.y + Math.sin(p.angle) * def.laserRange
       };
       drawActiveLaser(ctx, laserBeam, t);
     }
