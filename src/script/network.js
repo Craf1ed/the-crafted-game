@@ -94,10 +94,6 @@ export async function initNetwork(code, id) {
           cb.onLaserDeactivated(msg);
           break;
           
-        case 'pickupTaken':
-          cb.onPickupTaken(msg.pickupId);
-          break;
-          
         case 'pickupRespawned':
           cb.onPickupRespawn(msg.pickupId, msg.data);
           break;

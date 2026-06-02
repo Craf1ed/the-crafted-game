@@ -287,6 +287,12 @@ async function handleJoin(solo) {
           addRemoteBullet(b);
         }
         
+        // Update pickups from server
+        if (state.pickups) {
+          // Clear local pickups and sync with server
+          // This will be handled by the weapons.js module
+        }
+        
         // Handle death
         if (!localPlayer.alive && localPlayer.hp <= 0 && gamePhase === 'playing') {
           const killer = Object.values(state.players).find(p => p.kills > (localPlayer.kills || 0));
@@ -346,6 +352,55 @@ async function handleJoin(solo) {
       onKillRegistered:  handleRemoteKill,
       onDamageReceived:  handleRemoteDamage,
       onFlashbangReceived: handleRemoteFlashbang,
+      
+      onPickupSpawned: (pickup) => {
+        if (pickup.type === 'health') {
+          healthPickups[pickup.id] = pickup;
+        } else if (pickup.type === 'ammo') {
+          ammoPickups[pickup.id] = pickup;
+        } else if (pickup.type === 'weapon') {
+          weaponPickups[pickup.id] = pickup;
+        }
+      },
+      
+      onPickupTaken: (pickupId) => {
+        delete healthPickups[pickupId];
+        delete ammoPickups[pickupId];
+        delete weaponPickups[pickupId];
+      },
+      
+      onPlayerTeleported: (data) => {
+        if (data.id === myId) {
+          localPlayer.x = data.x;
+          localPlayer.y = data.y;
+        } else {
+          if (remotePlayers[data.id]) {
+            remotePlayers[data.id].x = data.x;
+            remotePlayers[data.id].y = data.y;
+          }
+        }
+      },
+      
+      onLaserActivated: (data) => {
+        if (data.id === myId) {
+          localPlayer.laserActive = true;
+        } else {
+          if (remotePlayers[data.id]) {
+            remotePlayers[data.id].laserActive = true;
+            remotePlayers[data.id].angle = data.angle;
+          }
+        }
+      },
+      
+      onLaserDeactivated: (data) => {
+        if (data.id === myId) {
+          localPlayer.laserActive = false;
+        } else {
+          if (remotePlayers[data.id]) {
+            remotePlayers[data.id].laserActive = false;
+          }
+        }
+      },
       onPlacedFlashbang: (data) => addRemoteFlashbang(data),
       onPlayerDashed: (id) => {
         if (id === myId) {
