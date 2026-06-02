@@ -187,7 +187,6 @@ async function handleSolo() {
 
   await loadMap();
   
-  // Pickups are now spawned server-side
   ammoPickups = {};
   weaponPickups = {};
   healthPickups = {};
@@ -260,24 +259,20 @@ async function handleJoin(solo) {
 
     setCallbacks({
       onGameState: (state) => {
-        // Update all players from server state
         for (const [id, pData] of Object.entries(state.players)) {
           if (id === myId) {
-            // Update local player from server
             Object.assign(localPlayer, pData);
             updateHealthHUD(localPlayer.hp, localPlayer.maxHp);
             updateAmmoHUD(localPlayer.ammo, WEAPON_DEFS[localPlayer.weaponId].maxAmmo, localPlayer.reloading);
             updateWeaponHUD(localPlayer.weaponId);
             updateDashHUD(localPlayer.dashCooldown, DASH_COOLDOWN);
           } else {
-            // Update remote player
             if (!remotePlayers[id]) remotePlayers[id] = {};
             Object.assign(remotePlayers[id], pData);
             updateRemoteRender(id, pData);
           }
         }
         
-        // Update bots from server state
         if (state.bots) {
           for (const [id, botData] of Object.entries(state.bots)) {
             if (!remotePlayers[id]) remotePlayers[id] = {};
@@ -286,19 +281,14 @@ async function handleJoin(solo) {
           }
         }
         
-        // Update bullets from server
         clearRemoteBullets();
         for (const b of state.bullets || []) {
           addRemoteBullet(b);
         }
         
-        // Update pickups from server
         if (state.pickups) {
-          // Clear local pickups and sync with server
-          // This will be handled by the weapons.js module
         }
         
-        // Handle death
         if (!localPlayer.alive && localPlayer.hp <= 0 && gamePhase === 'playing') {
           const killer = Object.values(state.players).find(p => p.kills > (localPlayer.kills || 0));
           if (killer) {
@@ -778,9 +768,6 @@ function checkPickups() {
   if (!localPlayer.alive) return;
   const r = PLAYER_RADIUS;
 
-  // Pickup collision is now handled server-side
-  // Client only renders pickups received from server
-
   for (const [did, drop] of Object.entries(weaponDrops)) {
     if (Math.hypot(localPlayer.x-drop.x, localPlayer.y-drop.y) < r+18) {
       if (localPlayer.weaponId!=='pistol') {
@@ -1024,7 +1011,6 @@ function update(dt, ts){
   tickRemoteRender(dt);
 
   if (gamePhase==='playing' && gameMode !== 'solo') {
-    // Send inputs to server (server-authoritative)
     const angle = Math.atan2((mouseY + camY) - localPlayer.y, (mouseX + camX) - localPlayer.x);
     sendPlayerInput({
       w: keys['w'] || keys['arrowup'],
@@ -1037,7 +1023,6 @@ function update(dt, ts){
       reload: keys['r'] && localPlayer.alive
     });
 
-    // Update camera based on server position
     camX = Math.max(0, Math.min(WORLD_W - canvas.width, localPlayer.x - canvas.width / 2));
     camY = Math.max(0, Math.min(WORLD_H - canvas.height, localPlayer.y - canvas.height / 2));
   } else if (gamePhase === 'playing' && !localPlayer.alive && gameMode !== 'solo') {
@@ -1048,7 +1033,6 @@ function update(dt, ts){
     }
   }
 
-  // Solo mode still runs client-side (for now)
   if (gameMode === 'solo') {
     if (!localPlayer.stunTimer || localPlayer.stunTimer <= 0) {
       updateLocalPlayer(localPlayer, keys, mouseX, mouseY, camX, camY, dt);
@@ -1077,7 +1061,6 @@ function update(dt, ts){
     checkBotCollisions(myId);
   }
 
-  // Bullets are now updated server-side and received via gameState
   tickKillFeed();
 
   if (gamePhase === 'playing') {
@@ -1193,7 +1176,6 @@ function draw(ts){
     }
   }
   
-  // Draw laser beams for remote players
   for (const [,p] of Object.entries(remotePlayers)) {
     if (p.alive && p.laserActive && WEAPON_DEFS[p.weaponId]?.isLaser) {
       const laserBeam = {

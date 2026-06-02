@@ -8,7 +8,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Root endpoint for health check
 app.get('/', (req, res) => {
   res.send('The Crafted Game server is fully operational');
 });
@@ -16,7 +15,6 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/ws' });
 
-// ==================== GAME CONSTANTS ====================
 const TILE = 40;
 const ACCEL = 1600;
 const MAX_SPEED = 230;
@@ -37,7 +35,6 @@ const WEAPON_DEFS = {
 
 const SPAWNABLE_WEAPONS = ['shotgun', 'sniper', 'burst', 'trishot', 'lasergun'];
 
-// ==================== MAP SYSTEM ====================
 let MAP_W = 60;
 let MAP_H = 45;
 let WORLD_W = MAP_W * TILE;
@@ -56,8 +53,7 @@ function loadMap() {
     const text = fs.readFileSync(mapPath, 'utf8');
     const lines = text.split('\n');
     
-    // Find teleporters line
-    const tpLine = lines.find(l => l.trimStart().startsWith('# teleporters:'));
+      const tpLine = lines.find(l => l.trimStart().startsWith('# teleporters:'));
     if (tpLine) {
       const raw = tpLine.replace('# teleporters:', '').trim();
       TELEPORTERS = raw.split('|').map(pair => {
@@ -70,8 +66,7 @@ function loadMap() {
       });
     }
     
-    // Parse grid
-    const dataLines = lines.filter(l => l.trim() && !l.trimStart().startsWith('#'));
+      const dataLines = lines.filter(l => l.trim() && !l.trimStart().startsWith('#'));
     const grid = dataLines.map(l => l.trim().split(/\s+/).map(Number));
     
     if (grid.length === 0) {
@@ -171,7 +166,6 @@ function randomOpenPos(avoidPoints = [], minDist = 120) {
   return { x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 };
 }
 
-// ==================== PLAYER LOGIC ====================
 function createPlayer(id, name, color, spawnPos) {
   const spawn = spawnPos || randomOpenPos();
   return {
@@ -202,23 +196,18 @@ function updatePlayer(player, dt) {
 
   const inputs = player.inputs;
   
-  // Update angle from input
   if (inputs.angle !== undefined) {
     player.angle = inputs.angle;
   }
   
-  // Dash cooldown
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
   
-  // Teleport cooldown
   if (player.teleportCooldown > 0) player.teleportCooldown -= dt;
   
-  // Burst timer
   if (player.burstTimer > 0) {
     player.burstTimer -= dt;
   }
   
-  // Dash timer
   if (player.dashTimer > 0) {
     player.dashTimer -= dt;
     if (player.dashTimer <= 0) {
@@ -236,7 +225,6 @@ function updatePlayer(player, dt) {
     player.dashTrail = player.dashTrail.filter(p => p.age < 0.18);
   }
 
-  // Movement
   const moving = inputs.w || inputs.s || inputs.a || inputs.d;
   const fricFactor = moving ? FRICTION : FRICTION * 2;
   const fric = Math.pow(1 - Math.min(fricFactor * dt, 0.99), 1);
@@ -262,7 +250,6 @@ function updatePlayer(player, dt) {
     player.vy = player.vy / spd * currentMaxSpeed; 
   }
 
-  // Collision with walls
   const r = player.radius;
   const nx = player.x + player.vx * dt;
   const clearX = !isSolid(nx + r, player.y) && !isSolid(nx - r, player.y)
@@ -276,14 +263,11 @@ function updatePlayer(player, dt) {
               && !isSolid(player.x + r - 2, ny + r) && !isSolid(player.x - r + 2, ny + r);
   if (clearY) player.y = ny; else player.vy = 0;
 
-  // Angle (aim direction)
   player.angle = inputs.angle || 0;
 
-  // Cooldowns
   if (player.shootCooldown > 0) player.shootCooldown -= dt;
   if (player.hitFlash > 0) player.hitFlash -= dt;
 
-  // Reload
   if (player.reloading) {
     const def = WEAPON_DEFS[player.weaponId];
     if (Date.now() - player.reloadStart >= def.reloadTime) {
@@ -316,6 +300,7 @@ function tryDash(player) {
   player.dashing = true;
   player.dashTimer = DASH_DURATION;
   player.dashCooldown = DASH_COOLDOWN;
+  console.log(`[DASH] Player ${player.name} dashed`);
   return true;
 }
 
@@ -330,7 +315,6 @@ function fireBullets(player) {
   const def = WEAPON_DEFS[player.weaponId];
   if (player.ammo <= 0) return;
   
-  // Handle laser gun
   if (def.isLaser) {
     if (!player.laserActive) {
       player.laserActive = true;
@@ -365,7 +349,6 @@ function fireBullets(player) {
   player.ammo = Math.max(0, player.ammo - 1);
   player.shootCooldown = def.fireRate;
   
-  // Handle burst fire
   if (def.burstCount && def.burstCount > 1) {
     player.burstRemaining = (player.burstRemaining || 0) + 1;
     player.burstTimer = def.burstDelay || 0.09;
@@ -386,10 +369,8 @@ function updateBullets(bullets, dt) {
   }
 }
 
-// ==================== ROOM STORAGE ====================
 const rooms = {};
 
-// Pickup spawn limits
 const MAX_HEALTH_PICKUPS = 8;
 const MAX_AMMO_PICKUPS = 12;
 const MAX_WEAPON_PICKUPS = 6;
@@ -416,16 +397,18 @@ function getRoom(code) {
   return rooms[code];
 }
 
-// ==================== PICKUP SYSTEM ====================
 function spawnPickup(room, type, x, y, data = {}) {
   const id = `pickup_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   room.pickups[id] = {
     id,
-    type, // 'health', 'ammo', 'weapon'
+    type,
     x, y,
     ...data,
-    spawnedAt: Date.now()
+    spawnedAt: Date.now(),
+    spawnAnimation: 0,
+    isSpawning: true
   };
+  console.log(`[PICKUP] Spawned ${type} pickup at (${Math.round(x)}, ${Math.round(y)}) in room ${room.code}`);
   return id;
 }
 
@@ -433,7 +416,6 @@ function countPickupsByType(room, type) {
   return Object.values(room.pickups).filter(p => p.type === type).length;
 }
 
-// ==================== BOT SYSTEM ====================
 function createBot(id, name, color, x, y) {
   return {
     id,
@@ -469,7 +451,6 @@ function updateBotAI(bot, room, dt) {
 
   const now = Date.now();
   
-  // Find target (nearest player)
   let nearestDist = Infinity;
   let nearestTarget = null;
   
@@ -482,7 +463,6 @@ function updateBotAI(bot, room, dt) {
     }
   }
   
-  // Change target periodically
   if (now - bot.targetChangeTime > 3000) {
     bot.targetId = nearestTarget ? nearestTarget.id : null;
     bot.targetChangeTime = now;
@@ -490,9 +470,7 @@ function updateBotAI(bot, room, dt) {
   
   const target = bot.targetId ? room.players[bot.targetId] : null;
   
-  // Movement AI
   if (now - bot.moveChangeTime > 2000 || !target) {
-    // Random movement or towards target
     if (target && Math.random() < 0.7) {
       const dx = target.x - bot.x;
       const dy = target.y - bot.y;
@@ -505,24 +483,20 @@ function updateBotAI(bot, room, dt) {
     bot.moveChangeTime = now;
   }
   
-  // Apply movement
   const moveSpeed = MAX_SPEED * 0.6;
   bot.vx += bot.moveDir.x * ACCEL * dt;
   bot.vy += bot.moveDir.y * ACCEL * dt;
   
-  // Friction
   const fric = Math.pow(1 - Math.min(FRICTION * dt, 0.99), 1);
   bot.vx *= fric;
   bot.vy *= fric;
   
-  // Speed limit
   const spd = Math.hypot(bot.vx, bot.vy);
   if (spd > moveSpeed) {
     bot.vx = bot.vx / spd * moveSpeed;
     bot.vy = bot.vy / spd * moveSpeed;
   }
   
-  // Collision with walls
   const r = bot.radius;
   const nx = bot.x + bot.vx * dt;
   const clearX = !isSolid(nx + r, bot.y) && !isSolid(nx - r, bot.y)
@@ -536,12 +510,10 @@ function updateBotAI(bot, room, dt) {
               && !isSolid(bot.x - r + 2, ny - r) && !isSolid(bot.x - r + 2, ny + r);
   if (clearY) bot.y = ny; else bot.vy = 0;
   
-  // Aim at target
   if (target) {
     bot.angle = Math.atan2(target.y - bot.y, target.x - bot.x);
   }
   
-  // Shooting AI
   const def = WEAPON_DEFS[bot.weaponId];
   if (target && bot.shootCooldown <= 0 && !bot.reloading) {
     const dist = Math.hypot(target.x - bot.x, target.y - bot.y);
@@ -557,12 +529,10 @@ function updateBotAI(bot, room, dt) {
     }
   }
   
-  // Reload if low ammo
   if (bot.ammo <= 2 && !bot.reloading) {
     tryReload(bot);
   }
   
-  // Update cooldowns
   if (bot.shootCooldown > 0) bot.shootCooldown -= dt;
   if (bot.dashCooldown > 0) bot.dashCooldown -= dt;
   if (bot.teleportCooldown > 0) bot.teleportCooldown -= dt;
@@ -571,29 +541,24 @@ function updateBotAI(bot, room, dt) {
     bot.ammo = def.maxAmmo;
   }
   
-  // Hit flash decay
   if (bot.hitFlash > 0) bot.hitFlash -= dt;
 }
 
 function updatePickups(room, dt) {
-  // Spawn pickups periodically
   const now = Date.now();
   
-  // Health pickups
   if (countPickupsByType(room, 'health') < MAX_HEALTH_PICKUPS && Math.random() < 0.01) {
     const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
     spawnPickup(room, 'health', pos.x, pos.y, { heal: 25 });
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
-  // Ammo pickups
   if (countPickupsByType(room, 'ammo') < MAX_AMMO_PICKUPS && Math.random() < 0.02) {
     const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
     spawnPickup(room, 'ammo', pos.x, pos.y, { amount: 10 });
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
-  // Weapon pickups - ensure at least 1 of each weapon type is always on map
   for (const weaponId of SPAWNABLE_WEAPONS) {
     const hasWeapon = Object.values(room.pickups).some(p => p.type === 'weapon' && p.weaponId === weaponId);
     if (!hasWeapon && countPickupsByType(room, 'weapon') < MAX_WEAPON_PICKUPS) {
@@ -603,7 +568,6 @@ function updatePickups(room, dt) {
     }
   }
   
-  // Random additional weapon pickups
   if (countPickupsByType(room, 'weapon') < MAX_WEAPON_PICKUPS && Math.random() < 0.005) {
     const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 100);
     const weapon = SPAWNABLE_WEAPONS[Math.floor(Math.random() * SPAWNABLE_WEAPONS.length)];
@@ -611,14 +575,22 @@ function updatePickups(room, dt) {
     broadcastToRoom(room.code, { type: 'pickupSpawned', pickup: room.pickups[Object.keys(room.pickups).slice(-1)[0]] });
   }
   
-  // Check pickup collisions
+  for (const [id, pickup] of Object.entries(room.pickups)) {
+    if (pickup.isSpawning) {
+      pickup.spawnAnimation += dt * 3;
+      if (pickup.spawnAnimation >= 1) {
+        pickup.spawnAnimation = 1;
+        pickup.isSpawning = false;
+      }
+    }
+  }
+  
   for (const [pid, player] of Object.entries(room.players)) {
     if (!player.alive) continue;
     
     for (const [pickupId, pickup] of Object.entries(room.pickups)) {
       const dist = Math.hypot(player.x - pickup.x, player.y - pickup.y);
       if (dist < PLAYER_RADIUS + 15) {
-        // Player picked up item
         let consumed = false;
         
         if (pickup.type === 'health' && player.hp < player.maxHp) {
@@ -645,14 +617,12 @@ function updatePickups(room, dt) {
     }
   }
   
-  // Bots can also pick up items
   for (const [bid, bot] of Object.entries(room.bots)) {
     if (!bot.alive) continue;
     
     for (const [pickupId, pickup] of Object.entries(room.pickups)) {
       const dist = Math.hypot(bot.x - pickup.x, bot.y - pickup.y);
       if (dist < PLAYER_RADIUS + 15) {
-        // Bot picked up item
         let consumed = false;
         
         if (pickup.type === 'health' && bot.hp < bot.maxHp) {
@@ -680,8 +650,7 @@ function updatePickups(room, dt) {
   }
 }
 
-// ==================== GAME LOOP ====================
-const TICK_RATE = 60; // 60 ticks per second
+const TICK_RATE = 60;
 const TICK_INTERVAL = 1000 / TICK_RATE;
 
 function gameLoop() {
@@ -693,15 +662,12 @@ function gameLoop() {
     const dt = Math.min((now - room.lastTick) / 1000, 0.1);
     room.lastTick = now;
     
-    // Update all players
     for (const [id, player] of Object.entries(room.players)) {
       updatePlayer(player, dt);
       
-      // Handle shooting
       if (player.inputs.mouseDown && player.shootCooldown <= 0 && !player.reloading) {
         const def = WEAPON_DEFS[player.weaponId];
         
-        // Handle laser gun
         if (def.isLaser) {
           if (!player.laserActive) {
             player.laserActive = true;
@@ -720,7 +686,6 @@ function gameLoop() {
         broadcastToRoom(code, { type: 'laserDeactivated', id: player.id });
       }
       
-      // Handle burst fire (additional shots)
       if (player.burstTimer <= 0 && player.burstRemaining > 0) {
         const def = WEAPON_DEFS[player.weaponId];
         if (def.burstCount && player.burstRemaining < def.burstCount && player.ammo > 0) {
@@ -751,15 +716,12 @@ function gameLoop() {
       }
     }
     
-    // Update all bots
     for (const [id, bot] of Object.entries(room.bots)) {
       updateBotAI(bot, room, dt);
     }
     
-    // Update pickups
     updatePickups(room, dt);
     
-    // Handle teleporters
     for (const [pid, player] of Object.entries(room.players)) {
       if (!player.alive) continue;
       if (player.teleportCooldown > 0) continue;
@@ -771,20 +733,19 @@ function gameLoop() {
         if (tx === tp.a.tx && ty === tp.a.ty) {
           player.x = tp.b.tx * TILE + TILE / 2;
           player.y = tp.b.ty * TILE + TILE / 2;
-          player.teleportCooldown = 1.0; // 1 second cooldown
+          player.teleportCooldown = 1.0;
           broadcastToRoom(code, { type: 'playerTeleported', id: pid, x: player.x, y: player.y });
           break;
         } else if (tx === tp.b.tx && ty === tp.b.ty) {
           player.x = tp.a.tx * TILE + TILE / 2;
           player.y = tp.a.ty * TILE + TILE / 2;
-          player.teleportCooldown = 1.0; // 1 second cooldown
+          player.teleportCooldown = 1.0;
           broadcastToRoom(code, { type: 'playerTeleported', id: pid, x: player.x, y: player.y });
           break;
         }
       }
     }
     
-    // Handle teleporters for bots
     for (const [bid, bot] of Object.entries(room.bots)) {
       if (!bot.alive) continue;
       if (bot.teleportCooldown > 0) continue;
@@ -796,42 +757,37 @@ function gameLoop() {
         if (tx === tp.a.tx && ty === tp.a.ty) {
           bot.x = tp.b.tx * TILE + TILE / 2;
           bot.y = tp.b.ty * TILE + TILE / 2;
-          bot.teleportCooldown = 1.0; // 1 second cooldown
+          bot.teleportCooldown = 1.0;
           broadcastToRoom(code, { type: 'playerTeleported', id: bid, x: bot.x, y: bot.y });
           break;
         } else if (tx === tp.b.tx && ty === tp.b.ty) {
           bot.x = tp.a.tx * TILE + TILE / 2;
           bot.y = tp.a.ty * TILE + TILE / 2;
-          bot.teleportCooldown = 1.0; // 1 second cooldown
+          bot.teleportCooldown = 1.0;
           broadcastToRoom(code, { type: 'playerTeleported', id: bid, x: bot.x, y: bot.y });
           break;
         }
       }
     }
     
-    // Handle laser damage
     for (const [pid, player] of Object.entries(room.players)) {
       if (!player.alive || !player.laserActive) continue;
       
       const def = WEAPON_DEFS[player.weaponId];
       if (!def.isLaser) continue;
       
-      // Check if laser hits any other player
       for (const [targetId, target] of Object.entries(room.players)) {
         if (targetId === pid || !target.alive) continue;
         
-        // Simple line of sight check
         const dx = target.x - player.x;
         const dy = target.y - player.y;
         const dist = Math.hypot(dx, dy);
         const angle = Math.atan2(dy, dx);
         
-        // Check if target is within laser angle and range
         const angleDiff = Math.abs(angle - player.angle);
         const normalizedAngleDiff = angleDiff > Math.PI ? 2 * Math.PI - angleDiff : angleDiff;
         
         if (normalizedAngleDiff < 0.1 && dist < def.laserRange) {
-          // Check for wall obstruction
           let blocked = false;
           const steps = Math.ceil(dist / TILE);
           for (let i = 1; i < steps; i++) {
@@ -844,7 +800,6 @@ function gameLoop() {
           }
           
           if (!blocked) {
-            // Apply laser damage
             const damage = def.laserDps * dt;
             target.hp -= damage;
             target.hitFlash = 0.15;
@@ -873,22 +828,18 @@ function gameLoop() {
         }
       }
       
-      // Check if laser hits any bot
       for (const [bid, bot] of Object.entries(room.bots)) {
         if (!bot.alive) continue;
         
-        // Simple line of sight check
         const dx = bot.x - player.x;
         const dy = bot.y - player.y;
         const dist = Math.hypot(dx, dy);
         const angle = Math.atan2(dy, dx);
         
-        // Check if target is within laser angle and range
         const angleDiff = Math.abs(angle - player.angle);
         const normalizedAngleDiff = angleDiff > Math.PI ? 2 * Math.PI - angleDiff : angleDiff;
         
         if (normalizedAngleDiff < 0.1 && dist < def.laserRange) {
-          // Check for wall obstruction
           let blocked = false;
           const steps = Math.ceil(dist / TILE);
           for (let i = 1; i < steps; i++) {
@@ -901,7 +852,6 @@ function gameLoop() {
           }
           
           if (!blocked) {
-            // Apply laser damage
             const damage = def.laserDps * dt;
             bot.hp -= damage;
             bot.hitFlash = 0.15;
@@ -926,7 +876,6 @@ function gameLoop() {
                 broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
               }
               
-              // Respawn bot after delay
               setTimeout(() => {
                 if (rooms[code] && rooms[code].bots[bid]) {
                   const newPos = randomOpenPos(Object.values(rooms[code].players).map(p => ({ x: p.x, y: p.y })), 100);
@@ -943,18 +892,14 @@ function gameLoop() {
       }
     }
     
-    // Update bullets
     updateBullets(room.bullets, dt);
     
-    // Check bullet collisions (players and bots)
     for (let i = room.bullets.length - 1; i >= 0; i--) {
       const b = room.bullets[i];
       
-      // Check player collisions
       for (const [pid, player] of Object.entries(room.players)) {
         if (!player.alive || pid === b.ownerId) continue;
         if (Math.hypot(b.x - player.x, b.y - player.y) < PLAYER_RADIUS + b.r) {
-          // Hit!
           player.hp -= b.dmg;
           player.hitFlash = 0.15;
           
@@ -996,12 +941,10 @@ function gameLoop() {
         }
       }
       
-      // Check bot collisions
       if (room.bullets[i]) {
         for (const [bid, bot] of Object.entries(room.bots)) {
           if (!bot.alive || bid === b.ownerId) continue;
           if (Math.hypot(b.x - bot.x, b.y - bot.y) < PLAYER_RADIUS + b.r) {
-            // Hit!
             bot.hp -= b.dmg;
             bot.hitFlash = 0.15;
             
@@ -1025,7 +968,6 @@ function gameLoop() {
                 broadcastToRoom(code, { type: 'killRegistered', kill: room.kills[kid] });
               }
               
-              // Respawn bot after delay
               setTimeout(() => {
                 if (rooms[code] && rooms[code].bots[bid]) {
                   const newPos = randomOpenPos(Object.values(rooms[code].players).map(p => ({ x: p.x, y: p.y })), 100);
@@ -1045,7 +987,6 @@ function gameLoop() {
       }
     }
     
-    // Broadcast player states
     const playerStates = {};
     for (const [id, player] of Object.entries(room.players)) {
       playerStates[id] = {
@@ -1065,7 +1006,6 @@ function gameLoop() {
       };
     }
     
-    // Broadcast bot states
     const botStates = {};
     for (const [id, bot] of Object.entries(room.bots)) {
       botStates[id] = {
@@ -1098,10 +1038,8 @@ function gameLoop() {
   setTimeout(gameLoop, TICK_INTERVAL);
 }
 
-// Start game loop
 setTimeout(gameLoop, TICK_INTERVAL);
 
-// ==================== WEBSOCKET ====================
 const clients = new Map();
 
 function broadcastToRoom(roomCode, message) {
@@ -1119,7 +1057,7 @@ function sendToClient(ws, message) {
 }
 
 wss.on('connection', (ws) => {
-  console.log('Client connected');
+  console.log('[SERVER] Client connected');
   
   let currentRoom = null;
   let currentId = null;
@@ -1202,6 +1140,7 @@ wss.on('connection', (ws) => {
             if (tryDash(room.players[currentId])) {
               broadcastToRoom(currentRoom, { type: 'playerDashed', id: currentId });
             }
+            room.players[currentId].inputs.dash = false;
           }
           
           if (msg.inputs.reload) {
@@ -1224,9 +1163,10 @@ wss.on('connection', (ws) => {
           };
           room.state = 'playing';
           room.lastTick = Date.now();
+          console.log(`[ROOM] Room ${currentRoom} mode set to ${msg.mode}`);
           
-          // Spawn bots for solo mode
           if (msg.mode === 'solo' && Object.keys(room.bots).length === 0) {
+            console.log('[BOTS] Spawning 5 bots for solo mode');
             const botColors = ['#ff4444', '#44ff44', '#4444ff', '#ffff44', '#ff44ff', '#44ffff'];
             for (let i = 0; i < 5; i++) {
               const pos = randomOpenPos(Object.values(room.players).map(p => ({ x: p.x, y: p.y })), 150);
@@ -1272,7 +1212,7 @@ wss.on('connection', (ws) => {
       }
     }
     clients.delete(ws);
-    console.log('Client disconnected');
+    console.log('[SERVER] Client disconnected');
   });
 
   ws.on('error', (error) => {
@@ -1280,11 +1220,9 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Cleanup old data
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of Object.entries(rooms)) {
-    // Clean old damage events
     for (const [victimId, events] of Object.entries(room.damage)) {
       for (const [eventId, event] of Object.entries(events)) {
         if (now - event.ts > 5000) delete room.damage[victimId][eventId];
@@ -1292,7 +1230,6 @@ setInterval(() => {
       if (Object.keys(room.damage[victimId]).length === 0) delete room.damage[victimId];
     }
     
-    // Clean old kills
     for (const [id, kill] of Object.entries(room.kills)) {
       if (now - kill.ts > 8000) delete room.kills[id];
     }

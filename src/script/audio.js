@@ -489,37 +489,31 @@ export function playKillStreak(count) {
   }
 }
 
-
-// Continuous laser beam hum — returns a stopFn
 let _laserHumNodes = null;
 export function startLaserHum() {
   if (!enabled) return;
   const ctx = getCtx();
-  if (_laserHumNodes) return; // already playing
+  if (_laserHumNodes) return;
 
   const m = ctx.createGain();
   m.gain.value = masterVol * 0.55;
   m.connect(ctx.destination);
 
-  // Base hum — deep sawtooth
   const o1 = ctx.createOscillator();
   o1.type = 'sawtooth'; o1.frequency.value = 80;
   const g1 = ctx.createGain(); g1.gain.value = 0.18;
   o1.connect(g1); g1.connect(m); o1.start();
 
-  // Mid buzz
   const o2 = ctx.createOscillator();
   o2.type = 'square'; o2.frequency.value = 320;
   const g2 = ctx.createGain(); g2.gain.value = 0.06;
   o2.connect(g2); g2.connect(m); o2.start();
 
-  // High whine sweep
   const o3 = ctx.createOscillator();
   o3.type = 'sine'; o3.frequency.value = 2400;
   const g3 = ctx.createGain(); g3.gain.value = 0.04;
   o3.connect(g3); g3.connect(m); o3.start();
 
-  // Crackle noise
   const bufLen = ctx.sampleRate * 2;
   const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
   const data = buf.getChannelData(0);
@@ -532,7 +526,6 @@ export function startLaserHum() {
   crackle.connect(hf); hf.connect(gc); gc.connect(m);
   crackle.start();
 
-  // Fade in
   m.gain.setValueAtTime(0, ctx.currentTime);
   m.gain.linearRampToValueAtTime(masterVol * 0.55, ctx.currentTime + 0.12);
 
@@ -553,10 +546,8 @@ export function playLaserCharge() {
   if (!enabled) return;
   const ctx = getCtx(); const now = ctx.currentTime;
   const m = master(ctx);
-  // Rising whine
   oscFreqEnv('sine', 400, 3200, now, 1.2, 0.18, 0.0001, m, ctx);
   oscFreqEnv('sawtooth', 300, 1800, now, 1.2, 0.07, 0.0001, m, ctx);
-  // Crackle burst at end
   const hf = hpf(2500, m, ctx);
   noise(0.18, 0.12, 0.001, hf, ctx, now + 1.0);
 }
@@ -565,12 +556,10 @@ export function playLaserOverheat() {
   if (!enabled) return;
   const ctx = getCtx(); const now = ctx.currentTime;
   const m = master(ctx);
-  // Descending whine + sizzle
   oscFreqEnv('sawtooth', 1800, 120, now, 0.5, 0.22, 0.0001, m, ctx);
   oscFreqEnv('sine', 2200, 180, now, 0.6, 0.14, 0.0001, m, ctx);
   const hf = hpf(1800, m, ctx);
   noise(0.45, 0.18, 0.001, hf, ctx, now);
-  // Low thud
   oscFreqEnv('sine', 90, 30, now + 0.1, 0.4, 0.12, 0.0001, m, ctx);
 }
 
@@ -588,40 +577,31 @@ export function playEmpDetonate() {
   if (!enabled) return;
   const ctx = getCtx(); const now = ctx.currentTime;
   const m = master(ctx);
-  // Deep thud
   oscFreqEnv('sine', 180, 28, now, 0.6, 0.35, 0.001, m, ctx);
   oscFreqEnv('sine', 90,  18, now, 0.7, 0.18, 0.001, m, ctx);
-  // Shockwave crackle
   const hf = hpf(800, m, ctx);
   noise(0.55, 0.28, 0.001, hf, ctx, now);
   const bf = bpf(3200, 1.5, m, ctx);
   noise(0.35, 0.18, 0.001, bf, ctx, now + 0.05);
-  // EMP whine
   oscFreqEnv('sawtooth', 1200, 80, now, 0.8, 0.14, 0.001, m, ctx);
   oscFreqEnv('sine', 2400, 400, now + 0.1, 0.5, 0.08, 0.001, m, ctx);
-  // High crackle tail
   const hf2 = hpf(3000, m, ctx);
   noise(0.4, 0.1, 0.001, hf2, ctx, now + 0.3);
 }
 
 export function playFlash() {
-  // Play flash.mp3 file for the blinding effect
   try {
     const audio = new Audio('flash.mp3');
     audio.volume = Math.min(1, masterVol * 0.85);
     audio.play().catch(() => {});
   } catch(e) {}
-  // Fallback synthesized tinnitus ring in case file is missing
   if (!enabled) return;
   try {
     const ctx = getCtx(); const now = ctx.currentTime;
     const m = master(ctx);
-    // Bright pop
     oscFreqEnv('sine', 4000, 800, now, 0.5, 0.08, 0.001, m, ctx);
     oscFreqEnv('sine', 6000, 1200, now, 0.3, 0.06, 0.001, m, ctx);
-    // Tinnitus ring that fades over stun duration
     oscFreqEnv('sine', 3800, 3800, now + 0.05, 0.2, 2.5, 0.001, m, ctx);
-    // Low thud
     oscFreqEnv('sine', 120, 20, now, 0.55, 0.18, 0.001, m, ctx);
     const wn = hpf(1500, m, ctx);
     noise(0.4, 0.2, 0.001, wn, ctx, now);

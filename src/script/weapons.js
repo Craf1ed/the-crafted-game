@@ -160,6 +160,30 @@ export function drawBullets(ctx) {
 export function drawAmmoPickups(ctx, t, ammoPickups) {
   for (const pk of ammoPickups) {
     const pulse = 1 + 0.18 * Math.sin(t*3 + (pk.pulse||0));
+    
+    if (pk.isSpawning && pk.spawnAnimation !== undefined) {
+      const anim = pk.spawnAnimation;
+      const expandRadius = 25 * (1 - anim);
+      const alpha = anim;
+      
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(pk.x, pk.y, expandRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#ffff00';
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(pk.x, pk.y, expandRadius * 0.5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    
     ctx.save();
     ctx.beginPath(); ctx.arc(pk.x, pk.y, 9*pulse, 0, Math.PI*2);
     ctx.fillStyle='rgba(255,255,0,0.08)'; ctx.fill();
@@ -177,6 +201,30 @@ export function drawWeaponPickups(ctx, t, weaponPickups) {
   for (const wp of weaponPickups) {
     const def = WEAPON_DEFS[wp.weaponId]; if (!def) continue;
     const pulse = 1 + 0.2 * Math.sin(t*2.5 + (wp.pulse||0));
+    
+    if (wp.isSpawning && wp.spawnAnimation !== undefined) {
+      const anim = wp.spawnAnimation;
+      const expandRadius = 30 * (1 - anim);
+      const alpha = anim;
+      
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(wp.x, wp.y, expandRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = def.color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = alpha;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = def.color;
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(wp.x, wp.y, expandRadius * 0.6, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+    
     ctx.save();
     ctx.beginPath(); ctx.arc(wp.x, wp.y, 16*pulse, 0, Math.PI*2);
     ctx.fillStyle=def.color+'10'; ctx.fill();
@@ -194,6 +242,30 @@ export function drawWeaponPickups(ctx, t, weaponPickups) {
 export function drawHealthPickups(ctx, t, healthPickups) {
   for (const pk of healthPickups) {
     const pulse = 1 + 0.18 * Math.sin(t*3 + (pk.pulse||0));
+    
+    if (pk.isSpawning && pk.spawnAnimation !== undefined) {
+      const anim = pk.spawnAnimation;
+      const expandRadius = 25 * (1 - anim);
+      const alpha = anim;
+      
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(pk.x, pk.y, expandRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ff3333';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#ff3333';
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(pk.x, pk.y, expandRadius * 0.5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    
     ctx.save();
     ctx.beginPath(); ctx.arc(pk.x, pk.y, 9*pulse, 0, Math.PI*2);
     ctx.fillStyle='rgba(255,60,60,0.08)'; ctx.fill();

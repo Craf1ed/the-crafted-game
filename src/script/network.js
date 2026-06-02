@@ -139,7 +139,6 @@ export async function initNetwork(code, id) {
           break;
           
         case 'nameTakenResult':
-          // Handle name check response
           break;
       }
     } catch (e) {
@@ -193,17 +192,14 @@ export async function joinRoom(playerData, pickupPositions) {
           ws.removeEventListener('message', handleMessage);
           iAmHost = msg.iAmHost;
           
-          // Initialize pickups
           if (msg.pickups) {
             cb.onPickupsInit(msg.pickups);
           }
           
-          // Initialize meta if exists
           if (msg.meta && !msg.meta.ended) {
             cb.onRoomModeChanged(msg.meta);
           }
           
-          // Initialize existing players
           for (const [id, p] of Object.entries(msg.players)) {
             if (id !== myId) {
               cb.onPlayerUpdated(id, p);
@@ -228,7 +224,6 @@ export async function joinRoom(playerData, pickupPositions) {
   });
 }
 
-// Send player inputs to server (WASD, mouse, dash, reload)
 export function sendPlayerInput(inputs) {
   try {
     ws.send(JSON.stringify({ type: 'playerInput', inputs }));
